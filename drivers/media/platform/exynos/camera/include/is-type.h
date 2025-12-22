@@ -16,6 +16,7 @@
 #include <linux/media-bus-format.h>
 #include <media/v4l2-device.h>
 #include "is-common-enum.h"
+#include <linux/minmax.h>
 
 enum is_device_type {
 	IS_DEVICE_SENSOR,
@@ -113,7 +114,5 @@ struct size_cr_set {
 #define CONVRES(src, src_max, tar_max) \
 	((src <= 0) ? (0) : ((src * tar_max + (src_max >> 1)) / src_max))
 
-#define MIN(a, b)	(((a) < (b)) ? (a) : (b))
-#define MAX(a, b)	(((a) > (b)) ? (a) : (b))
 
 #endif

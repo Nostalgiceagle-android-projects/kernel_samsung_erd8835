@@ -45,16 +45,20 @@
 	 * @brief: GET_BIT
 	 *	   Return the value of target bit
 	 */
-#define MAX(a, b) \
+#ifndef MAX
+#define MAX(a, b) ((a, b)) \
 		({__typeof__(a) _a = (a); \
 		__typeof__(b) _b = (b); \
 		_a > _b ? _a : _b; })
-	
-#define MIN(a, b) \
+#endif
+
+#ifndef MIN
+#define MIN(a, b) ((a, b)) \
 		({__typeof__(a) _a = (a); \
 		__typeof__(b) _b = (b); \
 		_a < _b ? _a : _b; })
-	
+#endif
+
 #define GET_BIT(var, pos) \
 		(((var) & (1 << (pos))) >> (pos))
 #define GET_BIT_LSB(var, pos) \

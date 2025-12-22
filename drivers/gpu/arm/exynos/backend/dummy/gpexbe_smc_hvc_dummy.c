@@ -21,21 +21,21 @@
 /* Implements */
 #include <gpexbe_smc_hvc.h>
 
-int gpexbe_smc_hvc_protection_enable()
+int gpexbe_smc_hvc_protection_enable(void)
 {
 	return 0;
 }
 
-int gpexbe_smc_hvc_protection_disable()
+int gpexbe_smc_hvc_protection_disable(void)
 {
 	return 0;
 }
 
-void gpexbe_smc_hvc_notify_power_on()
+void gpexbe_smc_hvc_notify_power_on(void)
 {
 }
 
-void gpexbe_smc_hvc_notify_power_off()
+void gpexbe_smc_hvc_notify_power_off(void)
 {
 }
 
