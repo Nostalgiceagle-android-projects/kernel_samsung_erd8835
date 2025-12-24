@@ -161,12 +161,19 @@ static void goodix_register_ext_module_work(struct work_struct *work)
 {
 	struct goodix_ext_module *module =
 		container_of(work, struct goodix_ext_module, work);
+	struct goodix_ts_core *cd = container_of(work, struct goodix_ts_core,
+			work_read_info.work);
 
 	ts_info("module register work IN");
 
 	/* driver probe failed */
 	if (core_module_prob_state != CORE_MODULE_PROB_SUCCESS) {
 		ts_err("Can't register ext_module core error");
+		return;
+	}
+
+	if (atomic_read(&cd->plat_data->shutdown_called)) {
+		ts_err("[sec_input] %s shutdown was called\n", __func__);
 		return;
 	}
 
@@ -903,7 +910,11 @@ exit:
 
 static int rawdata_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+	return single_open_size(file, rawdata_proc_show, pde_data(inode), PAGE_SIZE * 10);
+#else
 	return single_open_size(file, rawdata_proc_show, PDE_DATA(inode), PAGE_SIZE * 10);
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0))
@@ -1130,10 +1141,6 @@ static int goodix_parse_dt(struct device *dev, struct goodix_ts_core *core_data)
 		return -EINVAL;
 	}
 
-	/* for refresh_rate_mode cmd */
-	core_data->refresh_rate_enable = of_property_read_bool(node, "sec,refresh_rate_enable");
-	ts_info("sec,refresh_rate_enable:%d", core_data->refresh_rate_enable);
-
 	of_property_read_u32(node, "sec,specific_fw_update_ver", &core_data->specific_fw_update_ver);
 	ts_info("sec,specific_fw_update_ver:0x%x", core_data->specific_fw_update_ver);
 
@@ -1212,7 +1219,7 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 		}
 
 		ts_info("run LPM interrupt handler");
-		if (core_data->plat_data->power_state == SEC_INPUT_STATE_LPM) {
+		if (atomic_read(&core_data->plat_data->power_state) == SEC_INPUT_STATE_LPM) {
 			mutex_lock(&goodix_modules.mutex);
 			list_for_each_entry_safe(ext_module, next,
 					&goodix_modules.head, list) {
@@ -1298,6 +1305,8 @@ static int goodix_ts_irq_setup(struct goodix_ts_core *core_data)
 		return -EINVAL;
 	}
 
+	core_data->irq_empty_count = 0;
+
 	core_data->irq_workqueue = create_singlethread_workqueue("goodix_ts_irq_wq");
 	if (!IS_ERR_OR_NULL(core_data->irq_workqueue)) {
 		INIT_WORK(&core_data->irq_work, goodix_ts_handler_wait_resume_work);
@@ -1306,11 +1315,11 @@ static int goodix_ts_irq_setup(struct goodix_ts_core *core_data)
 		ts_err("failed to create irq_workqueue, err: %ld", PTR_ERR(core_data->irq_workqueue));
 	}
 
-	ts_info("IRQ:%u,flags:0x%X", core_data->irq, core_data->plat_data->irq_flag);
+	ts_info("IRQ:%u", core_data->irq);
 	ret = devm_request_threaded_irq(&core_data->pdev->dev,
 			core_data->irq, NULL,
 			goodix_ts_threadirq_func,
-			core_data->plat_data->irq_flag,
+			IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 			GOODIX_CORE_DRIVER_NAME,
 			core_data);
 	if (ret < 0)
@@ -1330,17 +1339,17 @@ int goodix_ts_power_on(struct goodix_ts_core *cd)
 {
 	int ret = 0;
 
-	ts_info("power on %d", cd->plat_data->power_state);
+	ts_info("power on %d", atomic_read(&cd->plat_data->power_state));
 	cd->plat_data->pinctrl_configure(cd->bus->dev, true);
 
-	if (cd->plat_data->power_state == SEC_INPUT_STATE_POWER_ON) {
+	if (atomic_read(&cd->plat_data->power_state) == SEC_INPUT_STATE_POWER_ON) {
 		ts_err("already power on");
 		return 0;
 	}
 
 	ret = cd->hw_ops->power_on(cd, true);
 	if (!ret)
-		cd->plat_data->power_state = SEC_INPUT_STATE_POWER_ON;
+		atomic_set(&cd->plat_data->power_state, SEC_INPUT_STATE_POWER_ON);
 	else
 		ts_err("failed power on, %d", ret);
 
@@ -1356,15 +1365,15 @@ int goodix_ts_power_off(struct goodix_ts_core *cd)
 {
 	int ret;
 
-	ts_info("power off %d", cd->plat_data->power_state);
-	if (cd->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
+	ts_info("power off %d", atomic_read(&cd->plat_data->power_state));
+	if (atomic_read(&cd->plat_data->power_state) == SEC_INPUT_STATE_POWER_OFF) {
 		ts_err("already power off");
 		return 0;
 	}
 
 	ret = cd->hw_ops->power_on(cd, false);
 	if (!ret)
-		cd->plat_data->power_state = SEC_INPUT_STATE_POWER_OFF;
+		atomic_set(&cd->plat_data->power_state, SEC_INPUT_STATE_POWER_OFF);
 	else
 		ts_err("failed power off, %d", ret);
 
@@ -1387,6 +1396,11 @@ static void goodix_ts_esd_work(struct work_struct *work)
 	const struct goodix_ts_hw_ops *hw_ops = cd->hw_ops;
 	int ret = 0;
 
+	if (atomic_read(&cd->plat_data->shutdown_called)) {
+		ts_err("[sec_input] %s shutdown was called\n", __func__);
+		return;
+	}
+
 	if (ts_esd->irq_status)
 		goto exit;
 
@@ -1399,15 +1413,11 @@ static void goodix_ts_esd_work(struct work_struct *work)
 	ret = hw_ops->esd_check(cd);
 	if (ret) {
 		ts_err("esd check failed");
-
-		if (mutex_trylock(&cd->input_dev->mutex)) {
-			cd->hw_ops->reset(cd, 100);
-			/* reinit */
-			cd->plat_data->init(cd);
-			mutex_unlock(&cd->input_dev->mutex);
-		} else {
-			ts_err("mutex is busy & skip!");
-		}
+		mutex_lock(&cd->plat_data->enable_mutex);
+		cd->hw_ops->reset(cd, 100);
+		/* reinit */
+		cd->plat_data->init(cd);
+		mutex_unlock(&cd->plat_data->enable_mutex);
 	}
 
 exit:
@@ -1539,10 +1549,7 @@ static int goodix_ts_suspend(struct goodix_ts_core *core_data)
 	hw_ops->irq_enable(core_data, false);
 
 	/* inform external module */
-	if (core_data->plat_data->lowpower_mode
-			|| core_data->plat_data->ed_enable
-			|| core_data->plat_data->pocket_mode
-			|| core_data->plat_data->fod_lp_mode) {
+	if (!sec_input_need_ic_off(core_data->plat_data)) {
 		mutex_lock(&goodix_modules.mutex);
 		if (!list_empty(&goodix_modules.head)) {
 			list_for_each_entry_safe(ext_module, next,
@@ -1581,11 +1588,11 @@ void goodix_ts_reinit(void *data)
 	int ret = 0;
 #endif
 
-	ts_info("Power mode=0x%x", core_data->plat_data->power_state);
+	ts_info("Power mode=0x%x", atomic_read(&core_data->plat_data->power_state));
 
 	goodix_ts_release_all_finger(core_data);
-	core_data->plat_data->touch_noise_status = 0;
-	core_data->plat_data->touch_pre_noise_status = 0;
+	atomic_set(&core_data->plat_data->touch_noise_status, 0);
+	atomic_set(&core_data->plat_data->touch_pre_noise_status, 0);
 	core_data->plat_data->wet_mode = 0;
 
 	if (core_data->bus->ic_type == IC_TYPE_BERLIN_D) {
@@ -1602,7 +1609,7 @@ void goodix_ts_reinit(void *data)
 	if (core_data->plat_data->support_fod && core_data->plat_data->fod_data.set_val)
 		goodix_set_fod_rect(core_data);
 
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_LPM) {
+	if (atomic_read(&core_data->plat_data->power_state) == SEC_INPUT_STATE_LPM) {
 		core_data->plat_data->lpmode(core_data, TO_LOWPOWER_MODE);
 		if (core_data->plat_data->lowpower_mode & SEC_TS_MODE_SPONGE_AOD)
 			goodix_set_aod_rect(core_data);
@@ -1657,7 +1664,7 @@ static int goodix_ts_resume(struct goodix_ts_core *core_data)
 	ts_info("Resume start");
 	atomic_set(&core_data->suspended, 0);
 
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_LPM) {
+	if (atomic_read(&core_data->plat_data->power_state) == SEC_INPUT_STATE_LPM) {
 		/* disable irq */
 		hw_ops->irq_enable(core_data, false);
 
@@ -1705,22 +1712,27 @@ static void debug_delayed_work_func(struct work_struct *work)
 	int i;
 	int cnt = 0;
 
+	if (atomic_read(&cd->plat_data->shutdown_called)) {
+		ts_err("[sec_input] %s shutdown was called\n", __func__);
+		return;
+	}
+
 	cd->hw_ops->read(cd, 0x10308, buf, 40);
 	for (i = 0; i < 40; i++)
 		cnt += sprintf(&put[cnt], "%x,", buf[i]);
 	ts_info("0x10308:%s", put);
 }
 
-static int goodix_ts_input_open(struct input_dev *dev)
+static int goodix_ts_enable(struct device *dev)
 {
-	struct goodix_ts_core *core_data = input_get_drvdata(dev);
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
 
 	cancel_delayed_work_sync(&core_data->work_read_info);
 
 	mutex_lock(&core_data->modechange_mutex);
 
 	ts_info("called");
-	core_data->plat_data->enabled = true;
+	atomic_set(&core_data->plat_data->enabled, true);
 	core_data->plat_data->prox_power_off = 0;
 	goodix_ts_resume(core_data);
 
@@ -1730,7 +1742,7 @@ static int goodix_ts_input_open(struct input_dev *dev)
 
 	mutex_unlock(&core_data->modechange_mutex);
 
-	if (!core_data->plat_data->shutdown_called)
+	if (!atomic_read(&core_data->plat_data->shutdown_called))
 		schedule_work(&core_data->work_print_info.work);
 
 	/* for debugging */
@@ -1739,21 +1751,21 @@ static int goodix_ts_input_open(struct input_dev *dev)
 	return 0;
 }
 
-static void goodix_ts_input_close(struct input_dev *dev)
+static int goodix_ts_disable(struct device *dev)
 {
-	struct goodix_ts_core *core_data = input_get_drvdata(dev);
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
 
 	cancel_delayed_work_sync(&core_data->work_read_info);
 
-	if (core_data->plat_data->shutdown_called) {
+	if (atomic_read(&core_data->plat_data->shutdown_called)) {
 		ts_err("shutdown was called");
-		return;
+		return 0;
 	}
 
 	mutex_lock(&core_data->modechange_mutex);
 
 	ts_info("called");
-	core_data->plat_data->enabled = false;
+	atomic_set(&core_data->plat_data->enabled, false);
 
 	/* for debugging */
 	cancel_delayed_work_sync(&core_data->debug_delayed_work);
@@ -1764,6 +1776,7 @@ static void goodix_ts_input_close(struct input_dev *dev)
 	goodix_ts_suspend(core_data);
 
 	mutex_unlock(&core_data->modechange_mutex);
+	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -1852,13 +1865,13 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 {
 	int ret;
 
-	cd->plat_data->support_mt_pressure = false;
 	ret = sec_input_device_register(cd->bus->dev, cd);
 	if (ret) {
 		ts_err("failed to register input device, %d", ret);
 		return ret;
 	}
 
+	mutex_init(&cd->plat_data->enable_mutex);
 	cd->input_dev = cd->plat_data->input_dev;
 	cd->input_dev_proximity = cd->plat_data->input_dev_proximity;
 
@@ -1886,12 +1899,13 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 	/* inspect init */
 	inspect_module_init();
 
-	cd->plat_data->enabled = true;
-	cd->input_dev->open = goodix_ts_input_open;
-	cd->input_dev->close = goodix_ts_input_close;
+	atomic_set(&cd->plat_data->enabled, true);
+	cd->plat_data->enable = goodix_ts_enable;
+	cd->plat_data->disable = goodix_ts_disable;
 	goodix_ts_cmd_init(cd);
 
-	cd->sec_ws = wakeup_source_register(NULL, "tsp");
+	cd->sec_ws = wakeup_source_register(cd->sec.fac_dev, "TSP");
+	device_init_wakeup(cd->sec.fac_dev, true);
 
 	goodix_ts_get_sponge_info(cd);
 
@@ -2191,7 +2205,7 @@ static int goodix_vbus_notification(struct notifier_block *nb,
 
 	cd->usb_plug_status = mode;
 
-	if (cd->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
+	if (atomic_read(&cd->plat_data->power_state) == SEC_INPUT_STATE_POWER_OFF) {
 		ts_err("ic off & set later");
 		return 0;
 	}
@@ -2366,9 +2380,14 @@ void goodix_ts_print_info_work(struct work_struct *work)
 	struct goodix_ts_core *cd = container_of(work, struct goodix_ts_core,
 			work_print_info.work);
 
+	if (atomic_read(&cd->plat_data->shutdown_called)) {
+		ts_err("[sec_input] %s shutdown was called\n", __func__);
+		return;
+	}
+
 	sec_input_print_info(cd->bus->dev, NULL);
 
-	if (!cd->plat_data->shutdown_called)
+	if (!atomic_read(&cd->plat_data->shutdown_called))
 		schedule_delayed_work(&cd->work_print_info, msecs_to_jiffies(TOUCH_PRINT_INFO_DWORK_TIME));
 }
 
@@ -2377,6 +2396,11 @@ void goodix_ts_read_info_work(struct work_struct *work)
 	struct goodix_ts_core *cd = container_of(work, struct goodix_ts_core,
 			work_read_info.work);
 
+	if (atomic_read(&cd->plat_data->shutdown_called)) {
+		ts_err("[sec_input] %s shutdown was called\n", __func__);
+		return;
+	}
+
 	goodix_ts_run_rawdata_all(cd);
 
 	/* reinit */
@@ -2384,7 +2408,7 @@ void goodix_ts_read_info_work(struct work_struct *work)
 
 	cd->info_work_done = true;
 
-	if (!cd->plat_data->shutdown_called)
+	if (!atomic_read(&cd->plat_data->shutdown_called))
 		schedule_work(&cd->work_print_info.work);
 }
 
@@ -2589,7 +2613,7 @@ retry_dev_confirm:
 	ts_info("goodix_ts_core probe success");
 	input_log_fix();
 
-	if (!core_data->plat_data->shutdown_called)
+	if (!atomic_read(&core_data->plat_data->shutdown_called))
 		schedule_delayed_work(&core_data->work_read_info, msecs_to_jiffies(50));
 
 #if IS_ENABLED(CONFIG_SAMSUNG_TUI)
@@ -2597,8 +2621,6 @@ retry_dev_confirm:
 	pdata->stui_tsp_exit = goodix_stui_tsp_exit;
 	pdata->stui_tsp_type = goodix_stui_tsp_type;
 #endif
-
-	sec_cmd_send_event_to_user(&core_data->sec, NULL, "RESULT=PROBE_DONE");
 
 	return 0;
 
@@ -2618,12 +2640,16 @@ static int goodix_ts_remove(struct platform_device *pdev)
 
 	ts_info("called");
 
-	core_data->plat_data->shutdown_called = true;
+	core_data->plat_data->enable = NULL;
+	core_data->plat_data->disable = NULL;
+
+	atomic_set(&core_data->plat_data->shutdown_called, true);
 	cancel_delayed_work_sync(&core_data->work_read_info);
 	cancel_delayed_work_sync(&core_data->work_print_info);
 
 	/* for debugging */
 	cancel_delayed_work_sync(&core_data->debug_delayed_work);
+	cancel_delayed_work_sync(&ts_esd->esd_work);
 
 #if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
 	sec_input_unregister_notify(&core_data->sec_input_nb);

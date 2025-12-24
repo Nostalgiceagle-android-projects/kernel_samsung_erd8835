@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2011 Samsung Electronics Co. Ltd.
- *  Inchul Im <inchul.im@samsung.com>
+ * Copyright (C) 2011-2023 Samsung Electronics Co. Ltd.
+ *  Inchul Im <inchul.im@samsung.com> and Samsung USB members
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,6 +49,7 @@ struct usb_notifier_platform_data {
 #endif
 	int	gpio_redriver_en;
 	int can_disable_usb;
+	int	support_reverse_bypass_en;
 
 #if IS_ENABLED(CONFIG_PDIC_NOTIFIER)
 	struct delayed_work usb_ldo_work;
@@ -115,6 +117,14 @@ static void of_get_usb_redriver_dt(struct device_node *np,
 
 }
 
+static void of_get_support_reverse_bypass_dt(struct device_node *np,
+		struct usb_notifier_platform_data *pdata)
+{
+	pdata->support_reverse_bypass_en = of_property_read_bool(np, "support_reverse_bypass_en");
+
+	pr_info("support_reverse_bypass_en : %d\n", pdata->support_reverse_bypass_en);
+}
+
 static int of_usb_notifier_dt(struct device *dev,
 		struct usb_notifier_platform_data *pdata)
 {
@@ -124,6 +134,7 @@ static int of_usb_notifier_dt(struct device *dev,
 		return -EINVAL;
 
 	of_get_usb_redriver_dt(np, pdata);
+	of_get_support_reverse_bypass_dt(np, pdata);
 	return 0;
 }
 #endif
@@ -141,9 +152,9 @@ static struct device_node *exynos_udc_parse_dt(void)
 	if (np)
 		goto find;
 
-	np = of_find_compatible_node(NULL, NULL, "samsung,origin-usb-notifier");
+	np = of_find_compatible_node(NULL, NULL, "samsung,usb-notifier");
 	if (!np) {
-		pr_err("%s: failed to get the origin-usb-notifier device node\n",
+		pr_err("%s: failed to get the usb-notifier device node\n",
 			__func__);
 		goto err;
 	}
@@ -269,7 +280,6 @@ static void usb_dp_regulator_onoff(struct usb_notifier_platform_data *pdata,
 	regulator_put(vdd3p3_dp);
 }
 
-extern int exynos_usbdrd_ldo_manual_control(bool on);
 static void usb_regulator_onoff(void *data, unsigned int onoff)
 {
 	struct usb_notifier_platform_data *pdata =
@@ -458,6 +468,9 @@ static int muic_usb_handle_notification(struct notifier_block *nb,
 			send_otg_notify(o_notify, NOTIFY_EVENT_USB_CABLE, 1);
 		else
 			;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		fallthrough;
+#endif
 	case ATTACHED_DEV_JIG_USB_OFF_MUIC:
 	case ATTACHED_DEV_JIG_USB_ON_MUIC:
 		if (action == MUIC_NOTIFY_CMD_DETACH)
@@ -680,24 +693,6 @@ static int exynos_set_peripheral(bool enable)
 	return 0;
 }
 
-static int exynos_gadget_speed(void)
-{
-	struct device_node *np = NULL;
-	struct platform_device *pdev = NULL;
-
-	np = exynos_udc_parse_dt();
-	if (np) {
-		pdev = of_find_device_by_node(np);
-		of_node_put(np);
-		if (pdev) {
-			return dwc3_gadget_speed(&pdev->dev);
-		}
-	}
-
-	pr_err("%s: failed to get the platform_device\n", __func__);
-	return 0;
-}
-
 #if IS_ENABLED(CONFIG_BATTERY_SAMSUNG)
 static int usb_set_chg_current(int state)
 {
@@ -776,11 +771,40 @@ static int is_skip_list(int index)
 }
 #endif
 
+static int reverse_bypass_power(int mode)
+{
+	union power_supply_propval val;
+	int ret = 0;
+
+	pr_info("%s %d, mode=%d\n", __func__, __LINE__, mode);
+
+	if (mode)
+		val.intval = TURN_OTG_OFF_RB_ON;
+	else
+		val.intval = TURN_RB_OFF;
+	ret = psy_do_property("otg", set, POWER_SUPPLY_EXT_PROP_OTG_VBUS_CTRL, val);
+	if (ret < 0) {
+		pr_err("%s: Fail to control reverse bypass\n", __func__);
+		return -1;
+	}
+
+	return ret;
+}
+
+static int get_support_reverse_bypass_en(void *data)
+{
+	struct usb_notifier_platform_data *pdata =
+		(struct usb_notifier_platform_data *)(data);
+	
+	return pdata->support_reverse_bypass_en;
+}
+
 static struct otg_notify dwc_lsi_notify = {
 	.vbus_drive	= otg_accessory_power,
+	.reverse_bypass_drive = reverse_bypass_power,
+	.get_support_reverse_bypass_en = get_support_reverse_bypass_en,
 	.set_host = exynos_set_host,
 	.set_peripheral	= exynos_set_peripheral,
-	.get_gadget_speed = exynos_gadget_speed,
 	.vbus_detect_gpio = -1,
 	.is_host_wakelock = 1,
 	.is_wakelock = 1,
@@ -811,10 +835,8 @@ static int usb_notifier_probe(struct platform_device *pdev)
 	if (pdev->dev.of_node) {
 		pdata = devm_kzalloc(&pdev->dev,
 			sizeof(struct usb_notifier_platform_data), GFP_KERNEL);
-		if (!pdata) {
-			dev_err(&pdev->dev, "Failed to allocate memory\n");
+		if (!pdata)
 			return -ENOMEM;
-		}
 
 		ret = of_usb_notifier_dt(&pdev->dev, pdata);
 		if (ret < 0) {
@@ -882,7 +904,7 @@ static int usb_notifier_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static const struct of_device_id usb_notifier_dt_ids[] = {
-	{ .compatible = "samsung,origin-usb-notifier",
+	{ .compatible = "samsung,usb-notifier",
 	},
 	{ },
 };
@@ -914,6 +936,6 @@ static void __exit usb_notifier_exit(void)
 late_initcall(usb_notifier_init);
 module_exit(usb_notifier_exit);
 
-MODULE_AUTHOR("inchul.im <inchul.im@samsung.com>");
+MODULE_AUTHOR("Samsung USB Team");
 MODULE_DESCRIPTION("USB notifier");
 MODULE_LICENSE("GPL");

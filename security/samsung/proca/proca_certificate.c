@@ -311,3 +311,8 @@ bool is_certificate_relevant_to_file(
 
 	return compare_with_five_signature(parsed_cert, stored_file_hash, hash_len);
 }
+
+#if defined(CONFIG_SEC_KUNIT)
+EXPORT_SYMBOL_GPL(parse_proca_certificate);
+EXPORT_SYMBOL_GPL(init_certificate_validation_hash);
+#endif

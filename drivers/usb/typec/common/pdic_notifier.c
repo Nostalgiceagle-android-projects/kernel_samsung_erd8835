@@ -14,7 +14,9 @@
 
 #include <linux/device.h>
 #include <linux/module.h>
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
 #include <linux/usb_notify.h>
+#endif
 #if IS_ENABLED(CONFIG_SEC_PD)
 #include <linux/battery/sec_pd.h>
 #elif defined(CONFIG_BATTERY_NOTIFIER)
@@ -125,7 +127,7 @@ const char *pdic_event_id_string(pdic_notifier_id_t id)
 		return "ID_SVID_INFO";
 	case PDIC_NOTIFY_ID_CLEAR_INFO:
 		return "ID_CLEAR_INFO";
-#if IS_ENABLED(CONFIG_MUIC_SM5504_POGO)
+#if IS_ENABLED(CONFIG_MUIC_POGO)
 	case PDIC_NOTIFY_ID_POGO:
 		return "ID_POGO";
 #endif
@@ -228,8 +230,10 @@ int pdic_notifier_register(struct notifier_block *nb, notifier_fn_t notifier,
 				__func__, ret);
 
 	/* current pdic's attached_device status notify */
+	mutex_lock(&pdic_notifier.notify_mutex);
 	nb->notifier_call(nb, 0,
 			&(pdic_notifier.pdic_template));
+	mutex_unlock(&pdic_notifier.notify_mutex);
 
 	return ret;
 }

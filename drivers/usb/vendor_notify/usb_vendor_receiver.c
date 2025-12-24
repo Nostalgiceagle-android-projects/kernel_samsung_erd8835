@@ -55,6 +55,16 @@ static void usb_vendor_receiver_audio_uevent(struct data_audio_uevent *data)
 	send_usb_audio_uevent(dev, card_num, attach);
 }
 
+static void usb_vendor_receiver_new_device(struct data_new_device *data)
+{
+	struct usb_device *dev = data->dev;
+	int ret = 0;
+
+	ret = check_new_device_added(dev);
+	if (ret)
+		data->ret = ret;
+}
+
 static int usb_vendor_receiver_callback(struct notifier_block *nb,
 		unsigned long action, void *data)
 {
@@ -67,6 +77,9 @@ static int usb_vendor_receiver_callback(struct notifier_block *nb,
 		break;
 	case USB_VENDOR_NOTIFY_AUDIO_UEVENT:
 		usb_vendor_receiver_audio_uevent(data);
+		break;
+	case USB_VENDOR_NOTIFY_NEW_DEVICE:
+		usb_vendor_receiver_new_device(data);
 		break;
 	default:
 		break;

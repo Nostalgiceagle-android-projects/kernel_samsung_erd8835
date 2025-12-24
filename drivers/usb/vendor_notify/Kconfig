@@ -11,6 +11,7 @@ config USB_VENDOR_NOTIFY
 config USB_VENDOR_RECEIVER
 	tristate "USB vendor receiver"
 	default n
+	depends on USB_NOTIFY_LAYER
 	help
 	 Say Y here to include support for USB vendor receiver.
 

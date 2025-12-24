@@ -55,6 +55,9 @@ module_param(pdic_param_factory_mode, int, 0444);
 static char __read_mostly *f_usb_mode;
 module_param(f_usb_mode, charp, 0444);
 
+static int pdic_param_recovery_mode;
+module_param(pdic_param_recovery_mode, int, 0444);
+
 static unsigned int usb_mode = PDIC_PARAM_MODE_NO;
 #if IS_BUILTIN(CONFIG_PDIC_NOTIFIER)
 static int __init read_f_mode(char *str)
@@ -178,4 +181,12 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(is_factory_mode_pdic_param);
+
+int is_recovery_mode_pdic_param(void)
+{
+	if (pdic_param_recovery_mode)
+		pr_info("%s recovery_mode=%d\n", __func__, pdic_param_recovery_mode);
+	return pdic_param_recovery_mode;
+}
+EXPORT_SYMBOL_GPL(is_recovery_mode_pdic_param);
 

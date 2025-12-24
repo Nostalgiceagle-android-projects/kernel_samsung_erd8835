@@ -105,13 +105,13 @@ int gsx_set_lowpowermode(void *data, u8 mode)
 		ret = cd->hw_ops->gesture(cd, true);
 		if (ret < 0)
 			ts_err("failed to switch gesture mode");
-		cd->plat_data->power_state = SEC_INPUT_STATE_LPM;
+		atomic_set(&cd->plat_data->power_state, SEC_INPUT_STATE_LPM);
 	} else {
 		/* switch coor mode */
 		ret = cd->hw_ops->gesture(cd, false);
 		if (ret < 0)
 			ts_err("failed to switch coor mode");
-		cd->plat_data->power_state = SEC_INPUT_STATE_POWER_ON;
+		atomic_set(&cd->plat_data->power_state, SEC_INPUT_STATE_POWER_ON);
 	}
 
 	return ret;

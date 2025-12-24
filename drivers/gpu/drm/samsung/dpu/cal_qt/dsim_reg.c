@@ -1706,10 +1706,7 @@ static void dsim_reg_set_config(u32 id, struct dsim_reg_config *config,
 	if (config->mode == DSIM_VIDEO_MODE) {
 		dsim_reg_set_video_mode(id, 1);
 		dsim_reg_set_hperiod(id, config, clks);
-		if (config->disable_shdw_vss_updt)
-			dsim_reg_sync_shadow_update_vsa(id, 0);
-		else
-			dsim_reg_sync_shadow_update_vsa(id, 1);
+		dsim_reg_sync_shadow_update_vsa(id, 0);
 		cal_log_debug(id, "%s: video mode set\n", __func__);
 	} else {
 		dsim_reg_set_video_mode(id, 0);

@@ -9,6 +9,7 @@ enum {
 	USB_VENDOR_NOTIFY_PCM_INFO,
 	USB_VENDOR_NOTIFY_CARDNUM,
 	USB_VENDOR_NOTIFY_AUDIO_UEVENT,
+	USB_VENDOR_NOTIFY_NEW_DEVICE,
 };
 
 /* USB_VENDOR_NOTIFY_PCM_INFO */
@@ -29,6 +30,12 @@ struct data_audio_uevent {
 	struct usb_device *dev;
 	int card_num;
 	int attach;
+};
+
+/* USB_VENDOR_NOTIFY_NEW_DEVICE */
+struct data_new_device {
+	struct usb_device *dev;
+	int ret;
 };
 
 #endif /* __USB_VENDOR_NOTIFY_DEFS_H */

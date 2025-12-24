@@ -20,7 +20,6 @@ enum {
 	DTYPE_RTMUTEX,
 	DTYPE_WQFLUSH,
 	DTYPE_SYNCIRQ,
-	DTYPE_DPMDEV,
 };
 #endif
 

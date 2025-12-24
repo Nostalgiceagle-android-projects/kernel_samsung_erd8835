@@ -183,7 +183,6 @@ struct dsim_reg_config {
 	u32			drive_strength;
 	unsigned int		clk_trail;
 	bool			emul_mode;
-	bool 			disable_shdw_vss_updt;
 	bool			lp_force_en;
 	bool			ignore_rx_trail;
 };

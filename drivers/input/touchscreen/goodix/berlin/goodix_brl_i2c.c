@@ -62,6 +62,11 @@ static int goodix_i2c_read(struct device *dev, unsigned int reg,
 		return -EIO;
 	}
 
+	if (atomic_read(&core_data->plat_data->shutdown_called)) {
+		input_err(true, &client->dev, "%s: shutdown was called\n", __func__);
+		return -EIO;
+	}
+
 #if IS_ENABLED(CONFIG_SAMSUNG_TUI)
 	if (STUI_MODE_TOUCH_SEC & stui_get_mode())
 		return -EBUSY;
@@ -152,6 +157,11 @@ static int goodix_i2c_write(struct device *dev, unsigned int reg,
 
 	if (core_data->plat_data->power_enabled == false) {
 		ts_err("IC power is off");
+		return -EIO;
+	}
+
+	if (atomic_read(&core_data->plat_data->shutdown_called)) {
+		input_err(true, &client->dev, "%s: shutdown was called\n", __func__);
 		return -EIO;
 	}
 
@@ -376,7 +386,7 @@ err_pdev:
 	return ret;
 }
 
-static int goodix_i2c_remove(struct i2c_client *client)
+static int goodix_i2c_dev_remove(struct i2c_client *client)
 {
 	if (!goodix_pdev)
 		return 0;
@@ -387,9 +397,25 @@ static int goodix_i2c_remove(struct i2c_client *client)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void goodix_i2c_remove(struct i2c_client *client)
+{
+	goodix_i2c_dev_remove(client);
+}
+#else
+static int goodix_i2c_remove(struct i2c_client *client)
+{
+	goodix_i2c_dev_remove(client);
+	return 0;
+}
+#endif
+
 static void goodix_i2c_shutdown(struct i2c_client *client)
 {
+	struct sec_ts_plat_data *pdata = client->dev.platform_data;
+
 	ts_info("called");
+	atomic_set(&pdata->shutdown_called, true);
 	goodix_i2c_remove(client);
 }
 

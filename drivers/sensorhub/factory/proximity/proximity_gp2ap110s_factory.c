@@ -46,7 +46,7 @@ static ssize_t proximity_modify_settings_show(struct device *dev,
 	struct shub_sensor *sensor = get_sensor(SENSOR_TYPE_PROXIMITY);
 	struct proximity_data *data = sensor->data;
 
-	sensor->funcs->open_calibration_file();
+	sensor->funcs->open_calibration_file(SENSOR_TYPE_PROXIMITY);
 	return snprintf(buf, PAGE_SIZE, "%d\n", data->setting_mode);
 }
 

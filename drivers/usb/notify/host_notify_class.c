@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * Copyright (C) 2011-2022 Samsung, Inc.
+ * Copyright (C) 2011-2023 Samsung, Inc.
  * Author: Dongrak Shin <dongrak.shin@samsung.com>
  *
  */
 
- /* usb notify layer v3.7 */
+ /* usb notify layer v4.0 */
 
 #include <linux/module.h>
 #include <linux/types.h>
@@ -51,7 +51,7 @@ static ssize_t mode_show(
 		break;
 	}
 
-	return snprintf(buf, sizeof(mode)+1, "%s\n", mode);
+	return sprintf(buf, "%s\n", mode);
 }
 
 static ssize_t mode_store(
@@ -79,7 +79,7 @@ static ssize_t mode_store(
 
 #ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
 	if (ndev->set_mode) {
-		pr_info("host_notify: set mode %s\n", mode);
+		unl_info("host_notify: set mode %s\n", mode);
 		if (!strncmp(mode, "HOST", 4))
 			ndev->set_mode(NOTIFY_SET_ON);
 		else if (!strncmp(mode, "NONE", 4))
@@ -110,8 +110,8 @@ static ssize_t booster_show(struct device *dev, struct device_attribute *attr,
 		break;
 	}
 
-	pr_info("host_notify: read booster %s\n", booster);
-	return snprintf(buf,  sizeof(booster)+1, "%s\n", booster);
+	unl_info("host_notify: read booster %s\n", booster);
+	return sprintf(buf, "%s\n", booster);
 }
 
 static ssize_t booster_store(
@@ -136,7 +136,7 @@ static ssize_t booster_store(
 		goto error1;
 
 	if (ndev->set_booster) {
-		pr_info("host_notify: set booster %s\n", booster);
+		unl_info("host_notify: set booster %s\n", booster);
 		if (!strncmp(booster, "ON", 2)) {
 			ndev->set_booster(NOTIFY_SET_ON);
 			ndev->mode = NOTIFY_TEST_MODE;
@@ -211,20 +211,20 @@ int host_state_notify(struct host_notify_dev *ndev, int state)
 	int type = 0;
 
 	if (!ndev->dev) {
-		pr_err("host_notify: %s ndev->dev is NULL\n", __func__);
+		unl_err("host_notify: %s ndev->dev is NULL\n", __func__);
 		return -ENXIO;
 	}
 
 	mutex_lock(&host_notify.host_notify_lock);
 
-	pr_info("host_notify: ndev name=%s: state=%s\n",
+	unl_info("host_notify: ndev name=%s: state=%s\n",
 		ndev->name, host_state_string(state));
 
 	type = check_state_type(state);
 
 	if (type == NOTIFY_HOST_STATE) {
 		if (ndev->host_state != state) {
-			pr_info("host_notify: host_state (%s->%s)\n",
+			unl_info("host_notify: host_state (%s->%s)\n",
 				host_state_string(ndev->host_state),
 				host_state_string(state));
 			ndev->host_state = state;
@@ -238,7 +238,7 @@ int host_state_notify(struct host_notify_dev *ndev, int state)
 		}
 	} else if (type == NOTIFY_POWER_STATE) {
 		if (ndev->power_state != state) {
-			pr_info("host_notify: power_state (%s->%s)\n",
+			unl_info("host_notify: power_state (%s->%s)\n",
 				host_state_string(ndev->power_state),
 				host_state_string(state));
 			ndev->power_state = state;

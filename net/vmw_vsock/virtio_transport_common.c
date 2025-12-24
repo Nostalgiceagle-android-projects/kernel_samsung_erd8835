@@ -821,7 +821,6 @@ void virtio_transport_destruct(struct vsock_sock *vsk)
 	virtio_transport_cancel_close_work(vsk, true);
 
 	kfree(vvs);
-	vsk->trans = NULL;
 }
 EXPORT_SYMBOL_GPL(virtio_transport_destruct);
 

@@ -45,9 +45,11 @@
 #define SEC_BATTERY_CABLE_POGO_9V		 40
 #define SEC_BATTERY_CABLE_FPDO_DC		 41
 #define SEC_BATTERY_CABLE_WIRELESS_EPP		 42
-#define SEC_BATTERY_CABLE_WIRELESS_MPP		 43
-#define SEC_BATTERY_CABLE_LO_TA			44
-#define SEC_BATTERY_CABLE_MAX			45
+#define SEC_BATTERY_CABLE_LO_TA			43
+#define SEC_BATTERY_CABLE_WIRELESS_EPP_NV	 44
+#define SEC_BATTERY_CABLE_WIRELESS_EPP_FAKE	 45
+#define SEC_BATTERY_CABLE_HV_WIRELESS_DC		46
+#define SEC_BATTERY_CABLE_MAX			47
 
 /* d2d support type */
 #define SB_D2D_NONE	0
@@ -168,6 +170,8 @@
 #define SEC_BATTERY_FULLCHARGED_CHGPSY		7
 	/* Limiter power supply property, NO additional full condition */
 #define SEC_BATTERY_FULLCHARGED_LIMITER		8
+	/* battery voltage check, NO additional full condition */
+#define SEC_BATTERY_FULLCHARGED_VCELL		9
 
 #define	TEMP_CONTROL_SOURCE_NONE	0
 #define	TEMP_CONTROL_SOURCE_BAT_THM	1
@@ -309,6 +313,12 @@
 #define WIRELESS_VOUT_10V_STEP		16
 #define WIRELESS_VOUT_OTG			17
 #define WIRELESS_VOUT_FORCE_9V	18
+#define WIRELESS_VOUT_5_5V		19
+#define WIRELESS_VOUT_4_5V		20
+#define WIRELESS_VOUT_FORCE_4_7V		21
+#define WIRELESS_VOUT_FORCE_4_8V		22
+#define WIRELESS_VOUT_FORCE_4_9V		23
+#define WIRELESS_VOUT_FORCE_5V	24
 
 /* enum mfc_send_command */
 #define MFC_END_SIG_STRENGTH		0
@@ -341,17 +351,20 @@
 #define MFC_REQ_TX_PWR_BUDG	27
 
 #define MFC_VOUT_4_5V	0
-#define MFC_VOUT_5V	1
-#define MFC_VOUT_5_5V	2
-#define MFC_VOUT_6V	3
-#define MFC_VOUT_7V	4
-#define MFC_VOUT_8V	5
-#define MFC_VOUT_9V	6
-#define MFC_VOUT_10V	7
-#define MFC_VOUT_11V	8
-#define MFC_VOUT_12V	9
-#define MFC_VOUT_12_5V	10
-#define MFC_VOUT_OTG	11
+#define MFC_VOUT_4_7V	1
+#define MFC_VOUT_4_8V	2
+#define MFC_VOUT_4_9V	3
+#define MFC_VOUT_5V	4
+#define MFC_VOUT_5_5V	5
+#define MFC_VOUT_6V	6
+#define MFC_VOUT_7V	7
+#define MFC_VOUT_8V	8
+#define MFC_VOUT_9V	9
+#define MFC_VOUT_10V	10
+#define MFC_VOUT_11V	11
+#define MFC_VOUT_12V	12
+#define MFC_VOUT_12_5V	13
+#define MFC_VOUT_OTG	14
 
 /* fod macro */
 #define FOD_FLAG_NONE			0
@@ -364,5 +377,12 @@
 #define SET_FOD_CC(_flag)		(FOD_FLAG_ ##_flag)
 #define SET_FOD_CV(_flag)		(FOD_FLAG_ ##_flag << 4)
 #define SET_FOD_FULL(_flag)		(FOD_FLAG_ ##_flag << 8)
+
+#define	DC_MODE_NONE	0
+#define	DC_MODE_1TO1	1 /* Unused */
+#define	DC_MODE_2TO1	2
+#define	DC_MODE_3TO1	3
+#define	DC_MODE_4TO1	4
+#define	DC_MODE_MAX	10
 
 #endif /* _DT_BINDINGS_BATTERY_SEC_BATTERY_H */

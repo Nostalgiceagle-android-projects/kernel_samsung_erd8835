@@ -553,6 +553,7 @@ enum power_supply_lsi_property {
 	POWER_SUPPLY_LSI_PROP_PCP_CLK,
 	POWER_SUPPLY_LSI_PROP_RID_OPS,
 	POWER_SUPPLY_LSI_PROP_RID_DISABLE,
+	POWER_SUPPLY_LSI_PROP_GET_REV,
 #if IS_ENABLED(CONFIG_MFD_S2MU106) || IS_ENABLED(CONFIG_MFD_S2MF301) || defined(CONFIG_BATTERY_GKI)
 	POWER_SUPPLY_LSI_PROP_MAX,
 #endif
@@ -676,7 +677,7 @@ enum power_supply_lsi_property {
 extern void muic_send_lcd_on_uevent(struct muic_platform_data *muic_pdata);
 extern int muic_set_hiccup_mode(int on_off);
 extern int muic_hv_charger_init(void);
-#if IS_ENABLED(CONFIG_MUIC_SM5504_POGO)
+#if IS_ENABLED(CONFIG_MUIC_POGO)
 extern int muic_set_pogo_adc(int adc);
 #endif
 extern int muic_afc_get_voltage(void);
@@ -693,7 +694,7 @@ static inline void muic_send_lcd_on_uevent(struct muic_platform_data *muic_pdata
 static inline int muic_set_hiccup_mode(int on_off) {return 0; }
 static inline int muic_hv_charger_init(void) {return 0; }
 static inline int muic_afc_get_voltage(void) {return 0; }
-#if IS_ENABLED(CONFIG_MUIC_SM5504_POGO)
+#if IS_ENABLED(CONFIG_MUIC_POGO)
 static inline int muic_set_pogo_adc(int adc) {return 0};
 #endif
 static inline int muic_afc_set_voltage(int voltage) {return 0; }

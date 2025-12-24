@@ -84,7 +84,7 @@ static ssize_t prox_trim_show(struct device *dev, struct device_attribute *attr,
 	if (data->cal_data_len == 0)
 		return -EINVAL;
 
-	ret = sensor->funcs->open_calibration_file();
+	ret = sensor->funcs->open_calibration_file(SENSOR_TYPE_PROXIMITY);
 	if (ret == data->cal_data_len)
 		cal_data = (int *)data->cal_data;
 
@@ -116,7 +116,7 @@ static ssize_t prox_cal_show(struct device *dev,
 	if (data->cal_data_len == 0)
 		return -EINVAL;
 
-	ret = sensor->funcs->open_calibration_file();
+	ret = sensor->funcs->open_calibration_file(SENSOR_TYPE_PROXIMITY);
 	if (ret == data->cal_data_len)
 		memcpy(cal_data, data->cal_data, sizeof(cal_data));
 

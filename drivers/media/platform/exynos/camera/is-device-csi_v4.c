@@ -1482,9 +1482,6 @@ static void csi_err_check(struct is_device_csi *csi, ulong *err_id, enum csis_hw
 
 static void csi_err_print(struct is_device_csi *csi)
 {
-#if defined(OVERFLOW_PANIC_ENABLE_CSIS)
-	struct is_device_sensor *sensor;
-#endif
 	const char *err_str = NULL;
 	int vc, err;
 #ifdef USE_CAMERA_HW_BIG_DATA
@@ -1546,8 +1543,7 @@ static void csi_err_print(struct is_device_csi *csi)
 #if IS_ENABLED(CONFIG_EXYNOS_SCI_DBG_AUTO)
 				smc_ppc_enable(0);
 #endif
-				sensor = v4l2_get_subdev_hostdata(*csi->subdev);
-				if (!(csi->crc_flag || test_bit(IS_SENSOR_ESD_RECOVERY, &sensor->state) ||
+				if (!(csi->crc_flag ||
 				    is_get_debug_param(IS_DEBUG_PARAM_PHY_TUNE)))
 					is_debug_s2d(true, "[DMA%d][VC%d] CSIS error!! %s",
 						csi->wdma_ch[WDMA_IDX(csi, vc)], vc, err_str);

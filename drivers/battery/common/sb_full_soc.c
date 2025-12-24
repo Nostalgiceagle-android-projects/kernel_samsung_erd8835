@@ -348,7 +348,9 @@ static ssize_t sb_full_soc_store_attrs(struct device *dev,
 		if (n > 0) {
 			char cap_event[MAX_CAP_EVENT_STR] = { 0, };
 
-			if (sscanf(buf + n, "%s\n", cap_event) > 0)
+			if ((count - n) > MAX_CAP_EVENT_STR)
+				pr_info("%s: out of range\n", __func__);
+			else if (sscanf(buf + n, "%s\n", cap_event) > 0)
 				full_cap_event = conv_full_cap_event_value(cap_event);
 		}
 
@@ -511,7 +513,7 @@ void sec_bat_check_full_capacity(struct sec_battery_info *battery)
 			(is_full_cap_event_highsoc(battery->fs) ?
 				SEC_BAT_CHG_MODE_BUCK_OFF : SEC_BAT_CHG_MODE_CHARGING_OFF));
 
-		if (is_wireless_fake_type(battery->cable_type)) {
+		if (is_wireless_all_type(battery->cable_type)) {
 			value.intval = POWER_SUPPLY_STATUS_FULL;
 			psy_do_property(battery->pdata->wireless_charger_name, set,
 				POWER_SUPPLY_PROP_STATUS, value);

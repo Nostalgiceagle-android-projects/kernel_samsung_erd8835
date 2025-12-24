@@ -20,7 +20,6 @@
 #define DSS_ITEM_ARRDUMP_PANIC          "log_arrdumppanic"
 #define DSS_ITEM_FIRST		        "log_first"
 #define DSS_ITEM_BACKTRACE	        "log_backtrace"
-#define DSS_ITEM_WDTMSG			"wdtmsg"
 
 #define DSS_LOG_TASK                    "task_log"
 #define DSS_LOG_WORK                    "work_log"

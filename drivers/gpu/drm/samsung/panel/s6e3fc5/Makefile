@@ -17,7 +17,7 @@ subdir-ccflags-y += -I$(srctree)/$(src)/../oled_common
 
 subdir-ccflags-y += -I$(srctree)/$(src)/../oled_common
 
-mcd-panel-s6e3fc5_a54x-y += s6e3fc5.o s6e3fc5_a54x.o
+mcd-panel-s6e3fc5_m35x-y += s6e3fc5.o s6e3fc5_m35x.o
 
-obj-$(CONFIG_USDM_PANEL_S6E3FC5) += mcd-panel-s6e3fc5_a54x.o
+obj-$(CONFIG_USDM_PANEL_S6E3FC5) += mcd-panel-s6e3fc5_m35x.o
 

@@ -192,6 +192,21 @@ void usbpd_wait_entermode(struct if_cb_manager *man_core, int on)
 }
 EXPORT_SYMBOL(usbpd_wait_entermode);
 
+void usbpd_sbu_switch_control(int on)
+{
+	struct if_cb_manager *man_core = get_if_cb_manager();
+
+	if (!IS_ENABLED(CONFIG_SBU_SWITCH_CONTROL) || man_core == NULL ||
+			man_core->usbpd_d == NULL || man_core->usbpd_d->ops == NULL ||
+			man_core->usbpd_d->ops->usbpd_sbu_switch_control == NULL) {
+		pr_err("%s : This function isn't supported\n", __func__);
+		return;
+	}
+
+	man_core->usbpd_d->ops->usbpd_sbu_switch_control(man_core->usbpd_d->data, on);
+}
+EXPORT_SYMBOL(usbpd_sbu_switch_control);
+
 static int __init if_cb_manager_init(void)
 {
 	if (!man_core)

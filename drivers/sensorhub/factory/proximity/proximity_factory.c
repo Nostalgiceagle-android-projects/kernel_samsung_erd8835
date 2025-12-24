@@ -25,11 +25,20 @@
 #include "../../utility/shub_dev_core.h"
 #include "../../utility/shub_utility.h"
 
+#if defined(CONFIG_SHUB_KUNIT)
+#include <kunit/mock.h>
+#define __mockable __weak
+#define __visible_for_testing
+#else 
+#define __mockable
+#define __visible_for_testing static
+#endif
+
 /*************************************************************************/
 /* factory Sysfs                                                         */
 /*************************************************************************/
 
-static struct device *proximity_sysfs_device;
+__visible_for_testing struct device *proximity_sysfs_device;
 static struct device_attribute **chipset_attrs;
 
 static u32 position[6];
@@ -60,11 +69,11 @@ u16 get_prox_raw_data(void)
 {
 	u16 raw_data = 0;
 	s32 ms_delay = 20;
-	char tmpe_buf[8] = { 0, };
+	char temp_buf[8] = { 0, };
 	struct prox_raw_event *sensor_value =
 	    (struct prox_raw_event *)(get_sensor_event(SENSOR_TYPE_PROXIMITY_RAW)->value);
 
-	memcpy(&tmpe_buf[0], &ms_delay, 4);
+	memcpy(&temp_buf[0], &ms_delay, 4);
 
 	if (!get_sensor_enabled(SENSOR_TYPE_PROXIMITY_RAW)) {
 		batch_sensor(SENSOR_TYPE_PROXIMITY_RAW, 20, 0);
@@ -179,7 +188,7 @@ static DEVICE_ATTR(prox_avg, 0664, prox_avg_show, prox_avg_store);
 static DEVICE_ATTR_RO(prox_offset_pass);
 static DEVICE_ATTR_RO(trim_check);
 
-static struct device_attribute *proximity_attrs[] = {
+__visible_for_testing struct device_attribute *proximity_attrs[] = {
 	&dev_attr_prox_probe,
 	&dev_attr_thresh_high,
 	&dev_attr_thresh_low,

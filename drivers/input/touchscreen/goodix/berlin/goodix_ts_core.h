@@ -90,7 +90,9 @@ extern struct device *ptsp;
 #define TYPE_STATUS_EVENT_SPONGE_INFO	6
 #define TYPE_STATUS_EVENT_VENDOR_INFO	7
 
+#define SEC_TS_READY_STATUS         0x00
 #define SEC_TS_ACK_WET_MODE			0x01
+#define SEC_TS_NOISE_MODE			0x02
 
 #define STATUS_EVENT_VENDOR_STATE_CHANGED		0x61
 #define STATUS_EVENT_VENDOR_ACK_NOISE_STATUS_NOTI	0x64
@@ -134,13 +136,6 @@ extern struct device *ptsp;
 
 #define SNR_TEST_NON_TOUCH						0
 #define SNR_TEST_TOUCH							1
-
-enum switch_system_mode {
-	TO_TOUCH_MODE			= 0,
-	TO_LOWPOWER_MODE		= 1,
-	TO_SELFTEST_MODE		= 2,
-	TO_FLASH_MODE			= 3,
-};
 
 typedef enum {
 	GOODIX_TEST_RESULT_PASS = 0x00,
@@ -550,6 +545,13 @@ struct goodix_ts_test_self_rawdata {
 	int rx_min;
 };
 
+struct goodix_ts_test_type {
+	enum goodix_rawdata_test_type type;
+	int frequency_flag;
+	struct goodix_ts_test_rawdata *rawdata;
+	char spec_name[SEC_CMD_STR_LEN];
+};
+
 #define OPEN_TEST_RESULT		0x10FC2
 #define OPEN_TEST_RESULT_LEN	22
 #define DRV_CHAN_BYTES			7
@@ -627,7 +629,6 @@ struct goodix_ts_core {
 	int irq;
 	size_t irq_trig_cnt;
 
-	int factory_position;
 	int lpm_coord_event_cnt;
 
 	atomic_t irq_enabled;
@@ -650,6 +651,8 @@ struct goodix_ts_core {
 
 	int flip_enable;
 
+	int irq_empty_count;
+
 	int otg_flag;
 #if IS_ENABLED(CONFIG_VBUS_NOTIFIER)
 	struct notifier_block vbus_nb;
@@ -664,7 +667,6 @@ struct goodix_ts_core {
 
 	int debug_flag;
 
-	bool refresh_rate_enable;
 	u32 refresh_rate;
 	u8 glove_enable;
 

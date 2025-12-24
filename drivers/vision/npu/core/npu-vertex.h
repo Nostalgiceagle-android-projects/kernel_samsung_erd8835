@@ -18,8 +18,6 @@
 #include "npu-queue.h"
 #include "common/npu-profile-v2.h"
 
-#define PROFILE_ARRAY_SIZE 0x14
-
 struct npu_vertex;
 bool is_kpi_mode_enabled(bool strict);
 
@@ -54,7 +52,7 @@ struct npu_vertex_ctx {
 	struct mutex lock;
 	struct npu_queue queue;
 	struct npu_vertex *vertex;
-	struct npu_profile	profile[PROFILE_ARRAY_SIZE];
+	struct npu_profile	profile[20];
 };
 
 enum npu_vertex_state check_done_state(u32 state);

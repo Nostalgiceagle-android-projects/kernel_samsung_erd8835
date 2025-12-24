@@ -36,18 +36,8 @@ static void fw_update(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret = 0, update_type;
 
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
 	mutex_lock(&core_data->modechange_mutex);
 	update_type = sec->cmd_param[0];
 
@@ -55,6 +45,7 @@ static void fw_update(void *device_data)
 	case TSP_SDCARD:
 #if IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 		update_type = TSP_SIGNED_SDCARD;
+		fallthrough;
 #endif
 	case TSP_BUILT_IN:
 	case TSP_SPU:
@@ -75,15 +66,11 @@ static void fw_update(void *device_data)
 	core_data->plat_data->init(core_data);
 
 	if (ret < 0) {
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "OK");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-	ts_info("%s", buff);
+	ts_info("%d", ret);
 	mutex_unlock(&core_data->modechange_mutex);
 }
 
@@ -91,8 +78,6 @@ static void get_chip_vendor(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	snprintf(buff, sizeof(buff), "GOODIX");
 	ts_info("%s", buff);
@@ -108,8 +93,6 @@ static void get_chip_name(void *device_data)
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	snprintf(buff, sizeof(buff), "GT%s", core_data->fw_version.patch_pid);
 
@@ -131,13 +114,9 @@ static void get_fw_ver_ic(void *device_data)
 	char model[SEC_CMD_STR_LEN] = { 0 };
 	int ret = 0;
 
-	sec_cmd_set_default_result(sec);
-
 	ret = hw_ops->read_version(core_data, &core_data->fw_version);
 	if (ret) {
 		ts_err("failed to read version, %d", ret);
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
@@ -145,8 +124,6 @@ static void get_fw_ver_ic(void *device_data)
 	ret = hw_ops->get_ic_info(core_data, &core_data->ic_info);
 	if (ret) {
 		ts_err("failed to get ic info, %d", ret);
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
@@ -176,8 +153,6 @@ static void get_fw_ver_bin(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 
-	sec_cmd_set_default_result(sec);
-
 	/* IC version, Project version, module version, fw version */
 	snprintf(buff, sizeof(buff), "GT%02X%02X%02X%02X",
 			core_data->fw_info_bin.ic_name_list,
@@ -199,8 +174,6 @@ static void get_config_ver(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 
-	sec_cmd_set_default_result(sec);
-
 	snprintf(buff, sizeof(buff), "GT_%08X_%02X",
 			core_data->ic_info.version.config_id,
 			core_data->ic_info.version.config_version);
@@ -216,7 +189,6 @@ static void get_x_num(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	char buff[16] = { 0 };
 
-	sec_cmd_set_default_result(sec);
 	snprintf(buff, sizeof(buff), "%d", core_data->ic_info.parm.drv_num);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -229,7 +201,6 @@ static void get_y_num(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	char buff[16] = { 0 };
 
-	sec_cmd_set_default_result(sec);
 	snprintf(buff, sizeof(buff), "%d", core_data->ic_info.parm.sen_num);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -240,15 +211,11 @@ static void module_off_master(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[3] = { 0 };
 
 	ts_info("force power off");
 	core_data->hw_ops->irq_enable(core_data, false);
 	goodix_ts_power_off(core_data);
 
-	snprintf(buff, sizeof(buff), "OK");
-	sec_cmd_set_default_result(sec);
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 }
 
@@ -256,43 +223,12 @@ static void module_on_master(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[3] = { 0 };
 
 	ts_info("force power on");
 	goodix_ts_power_on(core_data);
 	core_data->hw_ops->irq_enable(core_data, true);
 
-	snprintf(buff, sizeof(buff), "OK");
-	sec_cmd_set_default_result(sec);
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-}
-
-static void set_factory_level(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
-
-	if (sec->cmd_param[0] < OFFSET_FAC_SUB || sec->cmd_param[0] > OFFSET_FAC_MAIN) {
-		ts_err("cmd data is abnormal, %d", sec->cmd_param[0]);
-		goto NG;
-	}
-
-	core_data->factory_position = sec->cmd_param[0];
-
-	ts_info("%d", core_data->factory_position);
-	snprintf(buff, sizeof(buff), "OK");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	return;
-
-NG:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 }
 
 enum trx_short_test_type {
@@ -309,19 +245,8 @@ static void run_trx_short_test(void *device_data)
 	int ret = -EIO;
 	int type = TEST_NONE;
 	char test[32];
-
 	char fail_buff[1024] = {0};
 	char tempv[25] = {0};
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is off");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
 
 	if (sec->cmd_param[0] == 1 && sec->cmd_param[1] == 1) {
 		type = OPEN_TEST;
@@ -331,8 +256,6 @@ static void run_trx_short_test(void *device_data)
 
 	if (type == TEST_NONE) {
 		ts_err("unsupported param %d,%d", sec->cmd_param[0], sec->cmd_param[1]);
-		snprintf(buff, sizeof(buff), "NA");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
 		return;
 	}
@@ -659,8 +582,6 @@ static void goodix_get_gap_data_all(void *device_data, int freq)
 	int node_gap_rx = 0;
 	char temp[SEC_CMD_STR_LEN] = { 0 };
 
-	sec_cmd_set_default_result(sec);
-
 	buff = kzalloc(core_data->ic_info.parm.drv_num * core_data->ic_info.parm.sen_num * CMD_RESULT_WORD_LEN, GFP_KERNEL);
 	if (!buff)
 		return;
@@ -714,403 +635,320 @@ static void get_gap_data_all(void *device_data)
 	goodix_get_gap_data_all(device_data, FREQ_NORMAL);
 }
 
-static void goodix_run_rawdata_read(void *device_data, int freq)
+static int goodix_get_cache_rawdata(struct goodix_ts_core *core_data, int test_type, u8 freq)
+{
+	int ret;
+
+	ts_raw_info("[TYPE] %d, [FREQ] %s", test_type,
+		(freq == FREQ_HIGH) ? "HIGH" : (freq == FREQ_LOW) ? "LOW" : "NORMAL");
+
+	mutex_lock(&core_data->modechange_mutex);
+	core_data->hw_ops->irq_enable(core_data, false);
+	ret = goodix_cache_rawdata(core_data, test_type, freq);
+	if (ret < 0)
+		ts_err("test failed, type:%d, freq:%d, %d", test_type, freq, ret);
+	goodix_ts_release_all_finger(core_data);
+	core_data->hw_ops->reset(core_data, 200);
+	core_data->hw_ops->irq_enable(core_data, true);
+	mutex_unlock(&core_data->modechange_mutex);
+
+	return ret;
+}
+
+static void goodix_run_rawdata_read(void *device_data, struct goodix_ts_test_type *test)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	struct goodix_ts_test_rawdata *rawdata;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char spec_name[SEC_CMD_STR_LEN] = { 0 };
 	int ret = -EIO;
+	short rawcap[2] = {SHRT_MAX, SHRT_MIN};
+	short rawcap_edge[2] = {SHRT_MAX, SHRT_MIN};
+	u8 tx = core_data->ic_info.parm.drv_num;
+	u8 rx = core_data->ic_info.parm.sen_num;
+	int ii, jj;
 
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	if (!test->rawdata) {
+		ts_err("test failed, rawdata is null");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
 
-	core_data->hw_ops->irq_enable(core_data, false);
+	memset(test->rawdata, 0x00, sizeof(struct goodix_ts_test_rawdata));
 
-	ts_raw_info("[FREQ] %s", (freq == FREQ_HIGH) ? "HIGH" : (freq == FREQ_LOW) ? "LOW" : "NORMAL");
-
-	if (freq == FREQ_HIGH) {
-		rawdata = &core_data->test_data.high_freq_rawdata;
-		snprintf(spec_name, sizeof(spec_name), "HIGH_FREQ_MUTUAL_RAW");
-	} else if (freq == FREQ_LOW) {
-		rawdata = &core_data->test_data.low_freq_rawdata;
-		snprintf(spec_name, sizeof(spec_name), "LOW_FREQ_MUTUAL_RAW");
-	} else {
-		rawdata = &core_data->test_data.rawdata;
-		snprintf(spec_name, sizeof(spec_name), "MUTUAL_RAW");
-	}
-
-	memset(rawdata, 0x00, sizeof(struct goodix_ts_test_rawdata));
-
-	ret = goodix_cache_rawdata(core_data, RAWDATA_TEST_TYPE_MUTUAL_RAW, freq);
+	ret = goodix_get_cache_rawdata(core_data, test->type, test->frequency_flag);
 	if (ret < 0) {
 		ts_err("test failed, %d", ret);
 		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "%d,%d", rawdata->min, rawdata->max);
+		snprintf(buff, sizeof(buff), "%d,%d", test->rawdata->min, test->rawdata->max);
 		sec->cmd_state = SEC_CMD_STATUS_OK;
+		goodix_ts_print_frame(core_data, test->rawdata);
 	}
 
-	goodix_ts_print_frame(core_data, rawdata);
+	if (test->type == RAWDATA_TEST_TYPE_MUTUAL_RAW && test->frequency_flag == FREQ_NORMAL) {
+		for (ii = 0; ii < rx; ii++) {
+			for (jj = 0; jj < tx; jj++) {
+				short *rawcap_ptr;
 
-	goodix_ts_release_all_finger(core_data);
-	core_data->hw_ops->reset(core_data, 200);
-	core_data->hw_ops->irq_enable(core_data, true);
+				if (ii == 0 || ii == rx - 1 || jj == 0 || jj == tx - 1)
+					rawcap_ptr = rawcap_edge;
+				else
+					rawcap_ptr = rawcap;
 
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), spec_name);
+				if (test->rawdata->data[(ii * tx) + jj] < rawcap_ptr[0])
+					rawcap_ptr[0] = test->rawdata->data[(ii * tx) + jj];
+				if (test->rawdata->data[(ii * tx) + jj] > rawcap_ptr[1])
+					rawcap_ptr[1] = test->rawdata->data[(ii * tx) + jj];
+			}
+		}
+		ts_raw_info("%s: rawcap:%d,%d rawcap_edge:%d,%d", __func__,
+					rawcap[0], rawcap[1], rawcap_edge[0], rawcap_edge[1]);
+	}
+
+	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), test->spec_name);
+		if (test->type == RAWDATA_TEST_TYPE_MUTUAL_RAW && test->frequency_flag == FREQ_NORMAL) {
+			snprintf(buff, SEC_CMD_STR_LEN, "%d,%d", rawcap[0], rawcap[1]);
+			sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "TSP_RAWCAP");
+			snprintf(buff, SEC_CMD_STR_LEN, "%d,%d", rawcap_edge[0], rawcap_edge[1]);
+			sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "TSP_RAWCAP_EDGE");
+		}
+	}
+
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	ts_raw_info("%s", buff);
+	ts_raw_info("[type%d,freq%d] %s", test->type, test->frequency_flag, buff);
 }
+
 static void run_high_frequency_rawdata_read(void *device_data)
 {
-	goodix_run_rawdata_read(device_data, FREQ_HIGH);
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	struct goodix_ts_test_type test;
+
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_RAW;
+	test.frequency_flag = FREQ_HIGH;
+	test.rawdata = &core_data->test_data.high_freq_rawdata;
+	snprintf(test.spec_name, sizeof(test.spec_name), "HIGH_FREQ_MUTUAL_RAW");
+
+	goodix_run_rawdata_read(device_data, &test);
 }
 
 static void run_low_frequency_rawdata_read(void *device_data)
 {
-	goodix_run_rawdata_read(device_data, FREQ_LOW);
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	struct goodix_ts_test_type test;
+
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_RAW;
+	test.frequency_flag = FREQ_LOW;
+	test.rawdata = &core_data->test_data.low_freq_rawdata;
+	snprintf(test.spec_name, sizeof(test.spec_name), "LOW_FREQ_MUTUAL_RAW");
+
+	goodix_run_rawdata_read(device_data, &test);
 }
 
 static void run_rawdata_read(void *device_data)
 {
-	goodix_run_rawdata_read(device_data, FREQ_NORMAL);
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	struct goodix_ts_test_type test;
+
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_RAW;
+	test.frequency_flag = FREQ_NORMAL;
+	test.rawdata = &core_data->test_data.rawdata;
+	snprintf(test.spec_name, sizeof(test.spec_name), "MUTUAL_RAW");
+
+	goodix_run_rawdata_read(device_data, &test);
+}
+
+static void set_result_all_data(struct sec_cmd_data *sec, int start, int size, int16_t *data)
+{
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	char buff[SEC_CMD_STR_LEN] = { 0 };
+	u8 tx = core_data->ic_info.parm.drv_num;
+	u8 rx = core_data->ic_info.parm.sen_num;
+	int buff_size = tx * rx * 7;
+	char *rawdata_buff;
+	int i;
+
+	rawdata_buff = vzalloc(buff_size);
+	if (!rawdata_buff) {
+		ts_err("failed to alloc rawdata_buff");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
+
+	for (i = start; i < size; i++) {
+		snprintf(buff, sizeof(buff), "%d,", data[i]);
+		strlcat(rawdata_buff, buff, buff_size);
+	}
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
+	ts_info("%s", rawdata_buff);
+	vfree(rawdata_buff);
+}
+
+static void goodix_run_read_all(void *device_data, struct goodix_ts_test_type *test)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (!test->rawdata) {
+		ts_err("test failed, rawdata is null");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
+
+	memset(test->rawdata, 0x00, sizeof(struct goodix_ts_test_rawdata));
+
+	ret = goodix_get_cache_rawdata(core_data, test->type, test->frequency_flag);
+	if (ret < 0) {
+		ts_err("test result is NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
+	goodix_ts_print_frame(core_data, test->rawdata);
+
+	set_result_all_data(sec, 0, test->rawdata->size, test->rawdata->data);
 }
 
 static void run_rawdata_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
-	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = tx * rx * 7;
-	int i;
+	struct goodix_ts_test_type test;
 
-	sec_cmd_set_default_result(sec);
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_RAW;
+	test.frequency_flag = FREQ_NORMAL;
+	test.rawdata = &core_data->test_data.rawdata;
 
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
+	goodix_run_read_all(device_data, &test);
+}
+
+static void goodix_run_read_realtime_all(void *device_data, struct goodix_ts_test_type *test)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (!test->rawdata) {
+		ts_err("test failed, rawdata is null");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		return;
 	}
 
-	run_rawdata_read(sec);
+	core_data->hw_ops->irq_enable(core_data, false);
+	ret = goodix_read_realtime(core_data, test->type);
+	goodix_ts_release_all_finger(core_data);
+	core_data->hw_ops->irq_enable(core_data, true);
 
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->test_data.rawdata.size != (tx * rx)) {
+	if (ret < 0) {
 		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
 		return;
 	}
+	goodix_ts_print_frame(core_data, test->rawdata);
 
-	for (i = 0; i < core_data->test_data.rawdata.size; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.rawdata.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	set_result_all_data(sec, 0, test->rawdata->size, test->rawdata->data);
 }
 
 static void run_cs_raw_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
-	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = tx * rx * 7;
-	int i;
+	struct goodix_ts_test_type test;
 
-	sec_cmd_set_default_result(sec);
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_RAW;
+	test.rawdata = &core_data->test_data.rawdata;
 
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
-	}
-
-	core_data->hw_ops->irq_enable(core_data, false);
-	goodix_read_realtime(core_data, RAWDATA_TEST_TYPE_MUTUAL_RAW);
-	goodix_ts_release_all_finger(core_data);
-	core_data->hw_ops->irq_enable(core_data, true);
-
-	goodix_ts_print_frame(core_data, &core_data->test_data.rawdata);
-
-	if (core_data->test_data.rawdata.size != (tx * rx)) {
-		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
-		return;
-	}
-
-	for (i = 0; i < core_data->test_data.rawdata.size; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.rawdata.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	goodix_run_read_realtime_all(device_data, &test);
 }
 
 static void run_cs_delta_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
-	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = tx * rx * 7;
-	int i;
+	struct goodix_ts_test_type test;
 
-	sec_cmd_set_default_result(sec);
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_DIFF;
+	test.rawdata = &core_data->test_data.diffdata;
 
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
-	}
-
-	core_data->hw_ops->irq_enable(core_data, false);
-	goodix_read_realtime(core_data, RAWDATA_TEST_TYPE_MUTUAL_DIFF);
-	goodix_ts_release_all_finger(core_data);
-	core_data->hw_ops->irq_enable(core_data, true);
-
-	goodix_ts_print_frame(core_data, &core_data->test_data.diffdata);
-
-	if (core_data->test_data.diffdata.size != (tx * rx)) {
-		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
-		return;
-	}
-
-	for (i = 0; i < core_data->test_data.diffdata.size; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.diffdata.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	goodix_run_read_realtime_all(device_data, &test);
 }
 
 static void run_high_frequency_rawdata_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
-	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = tx * rx * 7;
-	int i;
+	struct goodix_ts_test_type test;
 
-	sec_cmd_set_default_result(sec);
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_RAW;
+	test.frequency_flag = FREQ_HIGH;
+	test.rawdata = &core_data->test_data.high_freq_rawdata;
 
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
-	}
-
-	run_high_frequency_rawdata_read(sec);
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->test_data.high_freq_rawdata.size != (tx * rx)) {
-		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
-		return;
-	}
-
-	for (i = 0; i < core_data->test_data.high_freq_rawdata.size; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.high_freq_rawdata.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	goodix_run_read_all(device_data, &test);
 }
 
 static void run_low_frequency_rawdata_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
-	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = tx * rx * 7;
-	int i;
+	struct goodix_ts_test_type test;
 
-	sec_cmd_set_default_result(sec);
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_RAW;
+	test.frequency_flag = FREQ_LOW;
+	test.rawdata = &core_data->test_data.low_freq_rawdata;
 
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
-	}
-
-	run_low_frequency_rawdata_read(sec);
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->test_data.low_freq_rawdata.size != (tx * rx)) {
-		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
-		return;
-	}
-
-	for (i = 0; i < core_data->test_data.low_freq_rawdata.size; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.low_freq_rawdata.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	goodix_run_read_all(device_data, &test);
 }
 
 static void run_diffdata_read(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret = -EIO;
+	struct goodix_ts_test_type test;
 
-	sec_cmd_set_default_result(sec);
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_DIFF;
+	test.frequency_flag = FREQ_NORMAL;
+	test.rawdata = &core_data->test_data.diffdata;
+	snprintf(test.spec_name, sizeof(test.spec_name), "MUTUAL_DIFF");
 
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
-
-	core_data->hw_ops->irq_enable(core_data, false);
-
-	memset(&core_data->test_data.diffdata, 0x00, sizeof(core_data->test_data.diffdata));
-
-	ret = goodix_cache_rawdata(core_data, RAWDATA_TEST_TYPE_MUTUAL_DIFF, FREQ_NORMAL);
-	if (ret < 0) {
-		ts_err("test failed, %d", ret);
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	} else {
-		snprintf(buff, sizeof(buff), "%d,%d",
-				core_data->test_data.diffdata.min,
-				core_data->test_data.diffdata.max);
-		sec->cmd_state = SEC_CMD_STATUS_OK;
-	}
-
-	goodix_ts_print_frame(core_data, &core_data->test_data.diffdata);
-
-	goodix_ts_release_all_finger(core_data);
-	core_data->hw_ops->reset(core_data, 200);
-	core_data->hw_ops->irq_enable(core_data, true);
-
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "MUTUAL_DIFF");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	ts_raw_info("%s", buff);
+	goodix_run_rawdata_read(device_data, &test);
 }
 
 static void run_diffdata_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
-	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = tx * rx * 7;
-	int i;
+	struct goodix_ts_test_type test;
 
-	sec_cmd_set_default_result(sec);
+	test.type = RAWDATA_TEST_TYPE_MUTUAL_DIFF;
+	test.frequency_flag = FREQ_NORMAL;
+	test.rawdata = &core_data->test_data.diffdata;
 
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
+	goodix_run_read_all(device_data, &test);
+}
+
+static int goodix_get_self_rawdata(struct goodix_ts_core *core_data, int test_type,
+	struct goodix_ts_test_self_rawdata *rawdata)
+{
+	int ret;
+
+	if (!rawdata) {
+		ts_err("test failed, rawdata is null");
+		return -EINVAL;
 	}
 
-	run_diffdata_read(sec);
+	memset(rawdata, 0x00, sizeof(struct goodix_ts_test_self_rawdata));
 
-	sec_cmd_set_default_result(sec);
+	ret = goodix_get_cache_rawdata(core_data, test_type, FREQ_NORMAL);
+	if (ret >= 0)
+		goodix_ts_print_channel(core_data, rawdata);
 
-	if (core_data->test_data.diffdata.size != (tx * rx)) {
-		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
-		return;
-	}
-
-	for (i = 0; i < core_data->test_data.diffdata.size; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.diffdata.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	return ret;
 }
 
 static void run_self_rawdata_tx_read(void *device_data)
@@ -1120,21 +958,7 @@ static void run_self_rawdata_tx_read(void *device_data)
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret = -EIO;
 
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
-
-	core_data->hw_ops->irq_enable(core_data, false);
-
-	memset(&core_data->test_data.selfraw, 0x00, sizeof(core_data->test_data.selfraw));
-
-	ret = goodix_cache_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_RAW, FREQ_NORMAL);
+	ret = goodix_get_self_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_RAW, &core_data->test_data.selfraw);
 	if (ret < 0) {
 		ts_err("test failed, %d", ret);
 		snprintf(buff, sizeof(buff), "NG");
@@ -1143,12 +967,6 @@ static void run_self_rawdata_tx_read(void *device_data)
 		snprintf(buff, sizeof(buff), "%d,%d", core_data->test_data.selfraw.tx_min, core_data->test_data.selfraw.tx_max);
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	goodix_ts_print_channel(core_data, &core_data->test_data.selfraw);
-
-	goodix_ts_release_all_finger(core_data);
-	core_data->hw_ops->reset(core_data, 200);
-	core_data->hw_ops->irq_enable(core_data, true);
 
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "SELF_RAW_TX");
@@ -1160,46 +978,16 @@ static void run_self_rawdata_tx_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
 	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = (tx + rx) * 7;
-	int i;
+	int ret;
 
-	sec_cmd_set_default_result(sec);
-
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
-	}
-
-	run_self_rawdata_tx_read(sec);
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->test_data.selfraw.size != (tx + rx)) {
+	ret = goodix_get_self_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_RAW, &core_data->test_data.selfraw);
+	if (ret < 0) {
 		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
 		return;
 	}
-
-	for (i = 0; i < tx; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.selfraw.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	set_result_all_data(sec, 0, tx, core_data->test_data.selfraw.data);
 }
 
 static void run_self_rawdata_rx_read(void *device_data)
@@ -1209,21 +997,7 @@ static void run_self_rawdata_rx_read(void *device_data)
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret = -EIO;
 
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
-
-	core_data->hw_ops->irq_enable(core_data, false);
-
-	memset(&core_data->test_data.selfraw, 0x00, sizeof(core_data->test_data.selfraw));
-
-	ret = goodix_cache_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_RAW, FREQ_NORMAL);
+	ret = goodix_get_self_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_RAW, &core_data->test_data.selfraw);
 	if (ret < 0) {
 		ts_err("test failed, %d", ret);
 		snprintf(buff, sizeof(buff), "NG");
@@ -1232,12 +1006,6 @@ static void run_self_rawdata_rx_read(void *device_data)
 		snprintf(buff, sizeof(buff), "%d,%d", core_data->test_data.selfraw.rx_min, core_data->test_data.selfraw.rx_max);
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	goodix_ts_print_channel(core_data, &core_data->test_data.selfraw);
-
-	goodix_ts_release_all_finger(core_data);
-	core_data->hw_ops->reset(core_data, 200);
-	core_data->hw_ops->irq_enable(core_data, true);
 
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "SELF_RAW_RX");
@@ -1249,46 +1017,17 @@ static void run_self_rawdata_rx_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
 	u8 tx = core_data->ic_info.parm.drv_num;
 	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = (tx + rx) * 7;
-	int i;
+	int ret;
 
-	sec_cmd_set_default_result(sec);
-
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
-	}
-
-	run_self_rawdata_rx_read(sec);
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->test_data.selfraw.size != (tx + rx)) {
+	ret = goodix_get_self_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_RAW, &core_data->test_data.selfraw);
+	if (ret < 0) {
 		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
 		return;
 	}
-
-	for (i = tx; i < (tx + rx); i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.selfraw.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	set_result_all_data(sec, tx, (tx + rx), core_data->test_data.selfraw.data);
 }
 
 static void run_self_diffdata_read(void *device_data)
@@ -1297,31 +1036,17 @@ static void run_self_diffdata_read(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret = -EIO;
-	int min, max;
 
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
-
-	core_data->hw_ops->irq_enable(core_data, false);
-
-	memset(&core_data->test_data.selfdiff, 0x00, sizeof(core_data->test_data.selfdiff));
-
-	ret = goodix_cache_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_DIFF, FREQ_NORMAL);
+	ret = goodix_get_self_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_DIFF, &core_data->test_data.selfdiff);
 	if (ret < 0) {
 		ts_err("test failed, %d", ret);
 		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-	
-		min = core_data->test_data.selfdiff.tx_min > core_data->test_data.selfdiff.rx_min ? core_data->test_data.selfdiff.rx_min : core_data->test_data.selfdiff.tx_min;
-		max = core_data->test_data.selfdiff.tx_max > core_data->test_data.selfdiff.rx_max ? core_data->test_data.selfdiff.tx_max : core_data->test_data.selfdiff.rx_max;
+		int min = core_data->test_data.selfdiff.tx_min > core_data->test_data.selfdiff.rx_min ?
+			core_data->test_data.selfdiff.rx_min : core_data->test_data.selfdiff.tx_min;
+		int max = core_data->test_data.selfdiff.tx_max > core_data->test_data.selfdiff.rx_max ?
+			core_data->test_data.selfdiff.tx_max : core_data->test_data.selfdiff.rx_max;
 		ts_raw_info("%s : selfdiff tx: %d,%d rx: %d,%d\n", __func__,
 					core_data->test_data.selfdiff.tx_min, core_data->test_data.selfdiff.tx_max,
 					core_data->test_data.selfdiff.rx_min, core_data->test_data.selfdiff.rx_max);
@@ -1329,12 +1054,6 @@ static void run_self_diffdata_read(void *device_data)
 		snprintf(buff, sizeof(buff), "%d,%d", min, max);
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	goodix_ts_print_channel(core_data, &core_data->test_data.selfdiff);
-
-	goodix_ts_release_all_finger(core_data);
-	core_data->hw_ops->reset(core_data, 200);
-	core_data->hw_ops->irq_enable(core_data, true);
 
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "SELF_DIFF");
@@ -1346,46 +1065,15 @@ static void run_self_diffdata_read_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	char *rawdata_buff;
-	u8 tx = core_data->ic_info.parm.drv_num;
-	u8 rx = core_data->ic_info.parm.sen_num;
-	int buff_size = (tx + rx) * 7;
-	int i;
+	int ret;
 
-	sec_cmd_set_default_result(sec);
-
-	rawdata_buff = vzalloc(buff_size);
-	if (!rawdata_buff) {
-		ts_err("failed to alloc rawdata_buff");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		return;
-	}
-
-	run_self_diffdata_read(sec);
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->test_data.selfdiff.size != (tx + rx)) {
+	ret = goodix_get_self_rawdata(core_data, RAWDATA_TEST_TYPE_SELF_DIFF, &core_data->test_data.selfdiff);
+	if (ret < 0) {
 		ts_err("test result is NG");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		vfree(rawdata_buff);
 		return;
 	}
-
-	for (i = 0; i < core_data->test_data.selfdiff.size; i++) {
-		snprintf(buff, sizeof(buff), "%d,", core_data->test_data.selfdiff.data[i]);
-		strlcat(rawdata_buff, buff, buff_size);
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, rawdata_buff, buff_size);
-	ts_info("%s", rawdata_buff);
-	vfree(rawdata_buff);
+	set_result_all_data(sec, 0, core_data->test_data.selfdiff.size, core_data->test_data.selfdiff.data);
 }
 
 static void run_jitter_test(void *device_data)
@@ -1398,16 +1086,6 @@ static void run_jitter_test(void *device_data)
 	int self[2] = { 0 };
 	int min_idx = 0;
 	int max_idx = 1;
-
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
 
 	core_data->hw_ops->irq_enable(core_data, false);
 
@@ -1473,16 +1151,6 @@ static void run_jitter_delta_test(void *device_data)
 	int avg_matrix[2] = { 0 };
 	int min_idx = 0;
 	int max_idx = 1;
-
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
 
 	core_data->hw_ops->irq_enable(core_data, false);
 
@@ -1561,16 +1229,6 @@ static void run_interrupt_gpio_test(void *device_data)
 	uint32_t int_bit;
 	uint8_t temp_buf[16] = {0};
 	int retry = 20;
-
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
 
 	core_data->hw_ops->irq_enable(core_data, false);
 
@@ -1658,24 +1316,11 @@ static void run_snr_non_touched(void *device_data)
 {
  	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret = 1;
 	int frame_cnt = 0;
 
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
-
 	if (sec->cmd_param[0] < 1 || sec->cmd_param[0] > 1000) {
 		ts_err("abnormal parm : %d", sec->cmd_param[0]);
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
@@ -1688,15 +1333,12 @@ static void run_snr_non_touched(void *device_data)
 	goodix_ts_blocking_notify(NOTIFY_ESD_ON, NULL);
 
 	if (ret < 0) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "OK");
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
 
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	ts_raw_info("%s", buff);
+	ts_raw_info("%d", ret);
 }
 
 static void run_snr_touched(void *device_data)
@@ -1709,20 +1351,8 @@ static void run_snr_touched(void *device_data)
 	int i = 0;
 	int frame_cnt = 0;
 
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
-
 	if (sec->cmd_param[0] < 1 || sec->cmd_param[0] > 1000) {
 		ts_err("abnormal parm : %d", sec->cmd_param[0]);
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
@@ -1735,8 +1365,6 @@ static void run_snr_touched(void *device_data)
 	goodix_ts_blocking_notify(NOTIFY_ESD_ON, NULL);
 
 	if (ret < 0) {
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
@@ -1764,16 +1392,6 @@ static void run_sram_test(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret = 1;
-
-	sec_cmd_set_default_result(sec);
-
-	if (atomic_read(&core_data->suspended)) {
-		ts_err("IC is on suspend state");
-		snprintf(buff, sizeof(buff), "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		return;
-	}
 
 	core_data->hw_ops->irq_enable(core_data, false);
 
@@ -1820,15 +1438,13 @@ static void increase_disassemble_count(void *device_data)
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	int ret = 0;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 	unsigned char data[2] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	ret = goodix_read_nvm_data(core_data, data, 1);
 	if (ret < 0) {
 		ts_err("nvm read error(%d)", ret);
-		goto out;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
 	}
 
 	ts_info("nvm read disassemble_count(%d)", data[0]);
@@ -1842,12 +1458,11 @@ static void increase_disassemble_count(void *device_data)
 	ret = goodix_write_nvm_data(core_data, data, 1);
 	if (ret < 0) {
 		ts_err("nvm write error(%d)", ret);
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
 	}
 
-out:
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 }
 
 static void get_disassemble_count(void *device_data)
@@ -1858,12 +1473,11 @@ static void get_disassemble_count(void *device_data)
 	unsigned char data[2] = { 0 };
 	int ret = 0;
 
-	sec_cmd_set_default_result(sec);
-
 	ret = goodix_read_nvm_data(core_data, data, 1);
 	if (ret < 0) {
 		ts_err("nvm read error(%d)", data[0]);
-		data[0] = 0;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
 	}
 
 	if (data[0] == 0xff) {
@@ -1896,7 +1510,7 @@ static void factory_cmd_result_all(void *device_data)
 		goto out;
 	}
 
-	mutex_lock(&core_data->input_dev->mutex);
+	mutex_lock(&core_data->plat_data->enable_mutex);
 
 	sec->cmd_all_factory_state = SEC_CMD_STATUS_RUNNING;
 
@@ -1924,7 +1538,7 @@ static void factory_cmd_result_all(void *device_data)
 
 	sec->cmd_all_factory_state = SEC_CMD_STATUS_OK;
 
-	mutex_unlock(&core_data->input_dev->mutex);
+	mutex_unlock(&core_data->plat_data->enable_mutex);
 
 out:
 	ts_raw_info("%d%s", sec->item_count, sec->cmd_result_all);
@@ -1951,13 +1565,13 @@ static void factory_cmd_result_all_imagetest(void *device_data)
 		goto out;
 	}
 
-	mutex_lock(&core_data->input_dev->mutex);
+	mutex_lock(&core_data->plat_data->enable_mutex);
 	sec->cmd_all_factory_state = SEC_CMD_STATUS_RUNNING;
 
 	run_jitter_delta_test(sec);
 
 	sec->cmd_all_factory_state = SEC_CMD_STATUS_OK;
-	mutex_unlock(&core_data->input_dev->mutex);
+	mutex_unlock(&core_data->plat_data->enable_mutex);
 
 out:
 	ts_info("%d%s", sec->item_count, sec->cmd_result_all);
@@ -1969,15 +1583,9 @@ static void fix_active_mode(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	struct goodix_ts_cmd temp_cmd;
 	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
 		return;
 	}
 
@@ -1996,15 +1604,10 @@ static void fix_active_mode(void *device_data)
 	ret = core_data->hw_ops->send_cmd(core_data, &temp_cmd);
 	if (ret < 0) {
 		ts_err("send fix active mode cmd failed");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "OK");
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
 #if 0
@@ -2029,139 +1632,118 @@ static int goodix_ts_set_mode(struct goodix_ts_core *core_data, u8 reg, u8 data,
 #endif
 
 #define GOODIX_POKET_MODE_STATE_ADDR		0x71	// 0:ed, 1:pocket
-static void pocket_mode_enable(void *device_data)
+static int pocket_mode_enable_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret;
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
 		ts_err("abnormal parm (%d)", sec->cmd_param[0]);
-		goto fail;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return SEC_ERROR;
 	}
 
 	core_data->plat_data->pocket_mode = sec->cmd_param[0];
 	ts_info("pocket mode : %s", core_data->plat_data->pocket_mode ? "on" : "off");
 
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is OFF");
-		goto fail;
-	}
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	return SEC_SUCCESS;
+}
+
+static void pocket_mode_enable(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (pocket_mode_enable_save(device_data) < 0)
+		return;
 
 	ret = core_data->hw_ops->pocket_mode_enable(core_data, core_data->plat_data->pocket_mode);
 	if (ret < 0) {
 		ts_err("send pocket mode cmd failed");
-		goto fail;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
 	}
 
 	ts_info("send pocket mode cmd done");
+}
 
-	snprintf(buff, sizeof(buff), "OK");
+static int ear_detect_enable_save(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+
+	if (!(sec->cmd_param[0] == 0 || sec->cmd_param[0] == 1 || sec->cmd_param[0] == 3)) {
+		ts_err("abnormal parm (%d)", sec->cmd_param[0]);
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return SEC_ERROR;
+	}
+
+	core_data->plat_data->ed_enable = sec->cmd_param[0];
+	ts_info("ear detect mode(%d)", core_data->plat_data->ed_enable);
+
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
-
-fail:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
+	return SEC_SUCCESS;
 }
 
 static void ear_detect_enable(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret;
 
-	sec_cmd_set_default_result(sec);
-
-	if (!(sec->cmd_param[0] == 0 || sec->cmd_param[0] == 1 || sec->cmd_param[0] == 3)) {
-		ts_err("abnormal parm (%d)", sec->cmd_param[0]);
-		goto fail;
-	}
-
-	core_data->plat_data->ed_enable = sec->cmd_param[0];
-	ts_info("ear detect mode(%d)", core_data->plat_data->ed_enable);
-
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is OFF");
-		goto fail;
-	}
+	if (ear_detect_enable_save(device_data) < 0)
+		return;
 
 	ret = core_data->hw_ops->ed_enable(core_data, core_data->plat_data->ed_enable);
 	if (ret < 0) {
 		ts_err("send ear detect cmd failed");
-		goto fail;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
 	}
 
 	ts_info("send ear detect cmd done");
-
-	snprintf(buff, sizeof(buff), "OK");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
-
-fail:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
 }
 
 /* 0: exit LSM  1: enter LSM  2: debug  3: debug */
-static void low_sensitivity_mode_enable(void *device_data)
+static int low_sensitivity_mode_enable_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret;
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 3) {
 		ts_err("abnormal parm (%d)", sec->cmd_param[0]);
-		goto fail;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return SEC_ERROR;
 	}
 
 	mutex_lock(&core_data->modechange_mutex);
 	core_data->plat_data->low_sensitivity_mode = sec->cmd_param[0];
-
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		mutex_unlock(&core_data->modechange_mutex);
-		ts_err("IC is OFF");
-		goto fail;
-	}
-
-	ret = goodix_set_cmd(core_data, GOODIX_LS_MODE_ADDR, core_data->plat_data->low_sensitivity_mode);
-	if (ret < 0) {
-		mutex_unlock(&core_data->modechange_mutex);
-		ts_err("send low sensitivity mode cmd failed");
-		goto fail;
-	}
 	mutex_unlock(&core_data->modechange_mutex);
 
-	ts_info("set low sensitivity mode: %d", core_data->plat_data->low_sensitivity_mode);
-
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
+	return SEC_SUCCESS;
+}
 
-fail:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+static void low_sensitivity_mode_enable(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (low_sensitivity_mode_enable_save(device_data) < 0)
+		return;
+
+	mutex_lock(&core_data->modechange_mutex);
+	ret = goodix_set_cmd(core_data, GOODIX_LS_MODE_ADDR, core_data->plat_data->low_sensitivity_mode);
+	if (ret < 0) {
+		ts_err("send low sensitivity mode cmd failed");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+	} else {
+		ts_info("set low sensitivity mode: %d", core_data->plat_data->low_sensitivity_mode);
+	}
+	mutex_unlock(&core_data->modechange_mutex);
 }
 
 static void run_prox_intensity_read_all(void *device_data)
@@ -2176,17 +1758,6 @@ static void run_prox_intensity_read_all(void *device_data)
 	u16 thd_x, thd_y;
 	u8 temp_buf[11];
 	int ret;
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is OFF");
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
-	}
 
 	/* must enabled call mode 3 firstly */
 	if (core_data->plat_data->ed_enable != 3) {
@@ -2255,7 +1826,6 @@ out:
 		core_data->hw_ops->send_cmd(core_data, &temp_cmd);
 	}
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
 #if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
@@ -2267,13 +1837,6 @@ static void pocket_mode_state(void *device_data)
 	struct goodix_ts_cmd temp_cmd;
 	unsigned char status;
 	int ret;
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is OFF");
-		goto fail;
-	}
 
 	temp_cmd.len = 5;
 	temp_cmd.cmd = GOODIX_POKET_MODE_STATE_ADDR;
@@ -2299,14 +1862,10 @@ static void pocket_mode_state(void *device_data)
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 	return;
 
 fail:
-	snprintf(buff, sizeof(buff), "NG");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 	return;
 }
 
@@ -2318,13 +1877,6 @@ static void ear_detect_state(void *device_data)
 	struct goodix_ts_cmd temp_cmd;
 	unsigned char status;
 	int ret;
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is OFF");
-		goto fail;
-	}
 
 	temp_cmd.len = 5;
 	temp_cmd.cmd = GOODIX_POKET_MODE_STATE_ADDR;
@@ -2350,14 +1902,10 @@ static void ear_detect_state(void *device_data)
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 	return;
 
 fail:
-	snprintf(buff, sizeof(buff), "NG");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 	return;
 }
 #endif
@@ -2368,15 +1916,9 @@ static void set_game_mode(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	struct goodix_ts_cmd temp_cmd;
 	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
 		return;
 	}
 
@@ -2395,32 +1937,20 @@ static void set_game_mode(void *device_data)
 	ret = core_data->hw_ops->send_cmd(core_data, &temp_cmd);
 	if (ret < 0) {
 		ts_err("send game mode cmd failed");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "OK");
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
-static void glove_mode(void *device_data)
+static int glove_mode_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
+		return SEC_ERROR;
 	}
 
 	ts_info("glove mode : %s", sec->cmd_param[0] ? "on" : "off");
@@ -2430,18 +1960,24 @@ static void glove_mode(void *device_data)
 	else
 		core_data->glove_enable = 0;
 
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	return SEC_SUCCESS;
+}
+
+static void glove_mode(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (glove_mode_save(device_data) < 0)
+		return;
+
 	ret = goodix_set_cmd(core_data, GOODIX_GLOVE_MODE_ADDR, core_data->glove_enable);
 	if (ret < 0) {
 		ts_err("send glove mode cmd failed");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	} else {
-		snprintf(buff, sizeof(buff), "OK");
-		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
 static void set_sip_mode(void *device_data)
@@ -2450,15 +1986,9 @@ static void set_sip_mode(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	struct goodix_ts_cmd temp_cmd;
 	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
 		return;
 	}
 
@@ -2477,15 +2007,10 @@ static void set_sip_mode(void *device_data)
 	ret = core_data->hw_ops->send_cmd(core_data, &temp_cmd);
 	if (ret < 0) {
 		ts_err("send sip mode cmd failed");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "OK");
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
 static void set_note_mode(void *device_data)
@@ -2494,15 +2019,9 @@ static void set_note_mode(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	struct goodix_ts_cmd temp_cmd;
 	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
 		return;
 	}
 
@@ -2521,31 +2040,20 @@ static void set_note_mode(void *device_data)
 	ret = core_data->hw_ops->send_cmd(core_data, &temp_cmd);
 	if (ret < 0) {
 		ts_err("send note mode cmd failed");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "OK");
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
-static void spay_enable(void *device_data)
+static int spay_enable_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
+		return SEC_ERROR;
 	}
 
 	if (sec->cmd_param[0])
@@ -2556,12 +2064,24 @@ static void spay_enable(void *device_data)
 	ts_info(" spay %s, %02X\n",
 			sec->cmd_param[0] ? "on" : "off", ts->plat_data->lowpower_mode);
 
-	goodix_set_custom_library(ts);
-
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	return SEC_SUCCESS;
+}
+
+static void spay_enable(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (spay_enable_save(device_data) < 0)
+		return;
+
+	ret = goodix_set_custom_library(ts);
+	if (ret < 0) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
 }
 
 int goodix_set_aod_rect(struct goodix_ts_core *ts)
@@ -2582,14 +2102,11 @@ int goodix_set_aod_rect(struct goodix_ts_core *ts)
 	return ret;
 }
 
-static void set_aod_rect(void *device_data)
+static int set_aod_rect_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret, i;
-
-	sec_cmd_set_default_result(sec);
+	int i;
 
 	ts_info(" w:%d, h:%d, x:%d, y:%d, lowpower_mode:0x%02X\n",
 			sec->cmd_param[0], sec->cmd_param[1],
@@ -2598,48 +2115,39 @@ static void set_aod_rect(void *device_data)
 	for (i = 0; i < 4; i++)
 		ts->plat_data->aod_data.rect_data[i] = sec->cmd_param[i];
 
-	if (ts->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is OFF");
-		goto NG;
-	}
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	return SEC_SUCCESS;
+}
+
+static void set_aod_rect(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (set_aod_rect_save(device_data) < 0)
+		return;
 
 	ret = goodix_set_aod_rect(ts);
-	if (ret < 0)
-		goto NG;
-
-	snprintf(buff, sizeof(buff), "OK");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
-
-NG:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	if (ret < 0) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
 }
 
 static void get_aod_rect(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 	u8 data[8] = {0, };
 	u16 rect_data[4] = {0, };
 	int ret, i;
 
-	sec_cmd_set_default_result(sec);
-
-	if (ts->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("IC is OFF");
-		goto NG;
-	}
-
 	ret = ts->hw_ops->read_from_sponge(ts, 0x02, data, 8);
 	if (ret < 0) {
 		ts_info("Failed to read rect\n");
-		goto NG;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
 	}
 
 	for (i = 0; i < 4; i++)
@@ -2648,33 +2156,17 @@ static void get_aod_rect(void *device_data)
 	ts_info("w:%d, h:%d, x:%d, y:%d\n",
 			rect_data[0], rect_data[1], rect_data[2], rect_data[3]);
 
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
-
-NG:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
-static void aod_enable(void *device_data)
+static int aod_enable_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
+		return SEC_ERROR;
 	}
 
 	if (sec->cmd_param[0])
@@ -2685,28 +2177,34 @@ static void aod_enable(void *device_data)
 	ts_info("aod: %s, %02X\n",
 			sec->cmd_param[0] ? "on" : "off", ts->plat_data->lowpower_mode);
 
-	goodix_set_custom_library(ts);
-
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	return SEC_SUCCESS;
 }
 
-static void aot_enable(void *device_data)
+static void aod_enable(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
+	int ret;
 
-	sec_cmd_set_default_result(sec);
+	if (aod_enable_save(device_data) < 0)
+		return;
+
+	ret = goodix_set_custom_library(ts);
+	if (ret < 0) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
+}
+
+static int aot_enable_save(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
+		return SEC_ERROR;
 	}
 
 	if (sec->cmd_param[0])
@@ -2716,12 +2214,24 @@ static void aot_enable(void *device_data)
 
 	ts_info("%s, %02X\n", sec->cmd_param[0] ? "on" : "off", ts->plat_data->lowpower_mode);
 
-	goodix_set_custom_library(ts);
-
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	return SEC_SUCCESS;
+}
+
+static void aot_enable(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (aot_enable_save(device_data) < 0)
+		return;
+
+	ret = goodix_set_custom_library(ts);
+	if (ret < 0) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
 }
 
 void goodix_get_custom_library(struct goodix_ts_core *ts)
@@ -2759,7 +2269,7 @@ int goodix_set_custom_library(struct goodix_ts_core *ts)
 
 #if IS_ENABLED(CONFIG_SEC_FACTORY)
 		/* enable FOD when LCD on state */
-	if (ts->plat_data->support_fod && ts->plat_data->enabled)
+	if (ts->plat_data->support_fod && atomic_read(&ts->plat_data->enabled))
 		force_fod_enable = SEC_TS_MODE_SPONGE_PRESS;
 #endif
 
@@ -2801,6 +2311,68 @@ int goodix_set_press_property(struct goodix_ts_core *ts)
 	return ret;
 }
 
+static void fod_enable(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
+
+	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	} else if (!ts->plat_data->support_fod) {
+		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
+		return;
+	}
+
+	if (sec->cmd_param[0])
+		ts->plat_data->lowpower_mode |= SEC_TS_MODE_SPONGE_PRESS;
+	else
+		ts->plat_data->lowpower_mode &= ~SEC_TS_MODE_SPONGE_PRESS;
+
+	ts->plat_data->fod_data.press_prop = (sec->cmd_param[1] & 0x01) | ((sec->cmd_param[2] & 0x01) << 1);
+
+	ts_info("%s, fast:%s, strict:%s, %02X\n",
+			sec->cmd_param[0] ? "on" : "off",
+			ts->plat_data->fod_data.press_prop & 1 ? "on" : "off",
+			ts->plat_data->fod_data.press_prop & 2 ? "on" : "off",
+			ts->plat_data->lowpower_mode);
+
+	mutex_lock(&ts->modechange_mutex);
+
+	if (!atomic_read(&ts->plat_data->enabled) && sec_input_need_ic_off(ts->plat_data)) {
+		if (device_may_wakeup(ts->sec.fac_dev) && sec_input_cmp_ic_status(ts->bus->dev, CHECK_LPMODE))
+			disable_irq_wake(ts->irq);
+		ts->hw_ops->irq_enable(ts, false);
+		goodix_ts_power_off(ts);
+	} else {
+		goodix_set_custom_library(ts);
+		goodix_set_press_property(ts);
+	}
+
+	mutex_unlock(&ts->modechange_mutex);
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+}
+
+static void fod_lp_mode(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
+
+	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	} else if (!ts->plat_data->support_fod_lp_mode) {
+		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
+		return;
+	}
+
+	ts->plat_data->fod_lp_mode = sec->cmd_param[0];
+	ts_info("%d", ts->plat_data->fod_lp_mode);
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+}
+
 int goodix_set_fod_rect(struct goodix_ts_core *ts)
 {
 	u8 data[8] = { 0 };
@@ -2822,156 +2394,53 @@ int goodix_set_fod_rect(struct goodix_ts_core *ts)
 	return ret;
 }
 
-static void fod_enable(void *device_data)
+static int set_fod_rect_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
-
-	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
-	} else if (!ts->plat_data->support_fod) {
-		snprintf(buff, sizeof(buff), "NA");
-		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
-	}
-
-	if (sec->cmd_param[0])
-		ts->plat_data->lowpower_mode |= SEC_TS_MODE_SPONGE_PRESS;
-	else
-		ts->plat_data->lowpower_mode &= ~SEC_TS_MODE_SPONGE_PRESS;
-
-	ts->plat_data->fod_data.press_prop = (sec->cmd_param[1] & 0x01) | ((sec->cmd_param[2] & 0x01) << 1);
-
-	ts_info("%s, fast:%s, strict:%s, %02X\n",
-			sec->cmd_param[0] ? "on" : "off",
-			ts->plat_data->fod_data.press_prop & 1 ? "on" : "off",
-			ts->plat_data->fod_data.press_prop & 2 ? "on" : "off",
-			ts->plat_data->lowpower_mode);
-
-	mutex_lock(&ts->modechange_mutex);
-
-
-	if (!ts->plat_data->enabled && !ts->plat_data->lowpower_mode && !ts->plat_data->pocket_mode
-			&& !ts->plat_data->ed_enable && !ts->plat_data->fod_lp_mode) {
-		if (ts->plat_data->power_state == SEC_INPUT_STATE_LPM)
-			disable_irq_wake(ts->irq);
-		ts->hw_ops->irq_enable(ts, false);
-		goodix_ts_power_off(ts);
-	} else {
-		goodix_set_custom_library(ts);
-		goodix_set_press_property(ts);
-	}
-
-	mutex_unlock(&ts->modechange_mutex);
-
-	snprintf(buff, sizeof(buff), "OK");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
-}
-
-static void fod_lp_mode(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[64] = { 0 };
-
-	sec_cmd_set_default_result(sec);
-
-	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
-	} else if (!ts->plat_data->support_fod_lp_mode) {
-		snprintf(buff, sizeof(buff), "NA");
-		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
-	}
-
-	ts->plat_data->fod_lp_mode = sec->cmd_param[0];
-	ts_info("%d", ts->plat_data->fod_lp_mode);
-
-	snprintf(buff, sizeof(buff), "%s", "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_exit(sec);
-}
-
-static void set_fod_rect(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret = 0;
-
-	sec_cmd_set_default_result(sec);
 
 	ts_info("l:%d, t:%d, r:%d, b:%d",
 			sec->cmd_param[0], sec->cmd_param[1],
 			sec->cmd_param[2], sec->cmd_param[3]);
 
 	if (!ts->plat_data->support_fod) {
-		snprintf(buff, sizeof(buff), "NA");
 		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
+		return SEC_ERROR;
 	}
 
-	if (!sec_input_set_fod_rect(ts->bus->dev, sec->cmd_param))
-		goto NG;
-
-	if (ts->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_err("Touch is stopped! Set data at reinit()");
-		goto OK;
+	if (!sec_input_set_fod_rect(ts->bus->dev, sec->cmd_param)) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return SEC_ERROR;
 	}
 
-	ret = goodix_set_fod_rect(ts);
-	if (ret < 0)
-		goto NG;
-
-OK:
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
-
-NG:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	return SEC_SUCCESS;
 }
 
-static void singletap_enable(void *device_data)
+static void set_fod_rect(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
+	int ret = 0;
 
-	sec_cmd_set_default_result(sec);
+	if (set_fod_rect_save(device_data) < 0)
+		return;
+
+	ret = goodix_set_fod_rect(ts);
+	if (ret < 0) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
+}
+
+static int singletap_enable_save(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
-		return;
+		return SEC_ERROR;
 	}
 
 	if (sec->cmd_param[0])
@@ -2982,48 +2451,45 @@ static void singletap_enable(void *device_data)
 	ts_info("singletap: %s, %02X\n",
 			sec->cmd_param[0] ? "on" : "off", ts->plat_data->lowpower_mode);
 
-	goodix_set_custom_library(ts);
-
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	return SEC_SUCCESS;
+}
+
+static void singletap_enable(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (singletap_enable_save(device_data) < 0)
+		return;
+
+	ret = goodix_set_custom_library(ts);
+	if (ret < 0) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
 }
 
 static void debug(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[16] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	core_data->debug_flag = sec->cmd_param[0];
 
 	ts_info("%s: debug_flag is 0x%X\n", __func__, core_data->debug_flag);
 
-	snprintf(buff, sizeof(buff), "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_exit(sec);
 }
 
 static void check_connection(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 	uint32_t esd_addr = core_data->ic_info.misc.esd_addr;
 	uint8_t esd_val = 0xAA;
 	int ret;
-
-	sec_cmd_set_default_result(sec);
-
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF ||
-			core_data->plat_data->power_state == SEC_INPUT_STATE_LPM) {
-		ts_err("IC is not ready(%d)", core_data->plat_data->power_state);
-		goto err_out;
-	}
 
 	ret = core_data->hw_ops->write(core_data, esd_addr, &esd_val, 1);
 	if (ret < 0) {
@@ -3045,17 +2511,11 @@ static void check_connection(void *device_data)
 	}
 
 	ts_info("check connection OK");
-	snprintf(buff, sizeof(buff), "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_exit(sec);
 	return;
 
 err_out:
-	snprintf(buff, sizeof(buff), "NG");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_exit(sec);
 }
 
 // have change it
@@ -3066,9 +2526,6 @@ static void set_charger_mode(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	struct goodix_ts_cmd temp_cmd;
 	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	switch (sec->cmd_param[0]) {
 	case TYPE_WIRELESS_CHARGER_NONE:
@@ -3092,29 +2549,20 @@ static void set_charger_mode(void *device_data)
 		goto NG;
 	}
 
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec_cmd_set_cmd_exit(sec);
 
 NG:
-	snprintf(buff, sizeof(buff), "NG");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec_cmd_set_cmd_exit(sec);
 }
 #endif
 
-static void set_grip_data(void *device_data)
+static int set_grip_data_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 	u8 mode = G_NONE;
-
-	sec_cmd_set_default_result(sec);
-
-	memset(buff, 0, sizeof(buff));
 
 	if (sec->cmd_param[0] == 0) {	// edge handler
 		if (sec->cmd_param[1] == 0) {	// clear
@@ -3123,24 +2571,22 @@ static void set_grip_data(void *device_data)
 			core_data->plat_data->grip_data.edgehandler_direction = sec->cmd_param[1];
 			core_data->plat_data->grip_data.edgehandler_start_y = sec->cmd_param[2];
 			core_data->plat_data->grip_data.edgehandler_end_y = sec->cmd_param[3];
-		} else {
-			ts_err("cmd1 is abnormal, %d", sec->cmd_param[1]);
-			goto err_grip_data;
+			sec->cmd_state = SEC_CMD_STATUS_OK;
+			return (mode | G_SET_EDGE_HANDLER);
 		}
-
-		mode = mode | G_SET_EDGE_HANDLER;
-		core_data->plat_data->set_grip_data(core_data->bus->dev, mode);
+		ts_err("cmd1 is abnormal, %d", sec->cmd_param[1]);
 	} else if (sec->cmd_param[0] == 1) {	// portrait mode
 		core_data->plat_data->grip_data.edge_range = sec->cmd_param[1];
 		core_data->plat_data->grip_data.deadzone_up_x = sec->cmd_param[2];
 		core_data->plat_data->grip_data.deadzone_dn_x = sec->cmd_param[3];
 		core_data->plat_data->grip_data.deadzone_y = sec->cmd_param[4];
-		mode = mode | G_SET_NORMAL_MODE;
-		core_data->plat_data->set_grip_data(core_data->bus->dev, mode);
+		sec->cmd_state = SEC_CMD_STATUS_OK;
+		return (mode | G_SET_NORMAL_MODE);
 	} else if (sec->cmd_param[0] == 2) {	// landscape mode
 		if (sec->cmd_param[1] == 0) {	// use previous portrait setting
 			core_data->plat_data->grip_data.landscape_mode = 0;
-			mode = mode | G_CLR_LANDSCAPE_MODE;
+			sec->cmd_state = SEC_CMD_STATUS_OK;
+			return (mode | G_CLR_LANDSCAPE_MODE);
 		} else if (sec->cmd_param[1] == 1) {
 			core_data->plat_data->grip_data.landscape_mode = 1;
 			core_data->plat_data->grip_data.landscape_edge = sec->cmd_param[2];
@@ -3149,28 +2595,28 @@ static void set_grip_data(void *device_data)
 			core_data->plat_data->grip_data.landscape_bottom_deadzone = sec->cmd_param[5];
 			core_data->plat_data->grip_data.landscape_top_gripzone = sec->cmd_param[6];
 			core_data->plat_data->grip_data.landscape_bottom_gripzone = sec->cmd_param[7];
-			mode = mode | G_SET_LANDSCAPE_MODE;
-		} else {
-			ts_err("cmd1 is abnormal, %d", sec->cmd_param[1]);
-			goto err_grip_data;
+			sec->cmd_state = SEC_CMD_STATUS_OK;
+			return (mode | G_SET_LANDSCAPE_MODE);
 		}
-		core_data->plat_data->set_grip_data(core_data->bus->dev, mode);
-	} else {
-		ts_err("cmd0 is abnormal, %d", sec->cmd_param[0]);
-		goto err_grip_data;
+		ts_err("cmd1 is abnormal, %d", sec->cmd_param[1]);
 	}
+	ts_err("cmd0 is abnormal, %d", sec->cmd_param[0]);
 
-	snprintf(buff, sizeof(buff), "OK");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
-
-err_grip_data:
-	snprintf(buff, sizeof(buff), "NG");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	return -EINVAL;
+}
+
+static void set_grip_data(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int mode;
+
+	mode = set_grip_data_save(device_data);
+	if (mode < 0)
+		return;
+
+	core_data->plat_data->set_grip_data(core_data->bus->dev, mode);
 }
 
 int goodix_set_cover_mode(struct goodix_ts_core *core_data)
@@ -3204,29 +2650,21 @@ int goodix_set_cover_mode(struct goodix_ts_core *core_data)
 	return ret;
 }
 
-static void clear_cover_mode(void *device_data)
+static int clear_cover_mode_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret = 0;
-
-	sec_cmd_set_default_result(sec);
 
 #if IS_ENABLED(CONFIG_SEC_FACTORY)
 	ts_info("skip for factory binary");
-	snprintf(buff, sizeof(buff), "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec->cmd_state = SEC_CMD_STATUS_WAITING;
-	sec_cmd_set_cmd_exit(sec);
-	return;
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	return SEC_ERROR;
 #endif
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 3) {
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		ts_err("not support param[%d/%d]", sec->cmd_param[0], sec->cmd_param[1]);
-		goto exit;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return SEC_ERROR;
 	}
 
 	if (sec->cmd_param[0] > 1) {
@@ -3238,33 +2676,33 @@ static void clear_cover_mode(void *device_data)
 	}
 	core_data->plat_data->cover_type = sec->cmd_param[1];
 
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
-		ts_info("tsp ic off, save data & set later");
-		goto out;
-	}
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	return SEC_SUCCESS;
+}
 
-	mutex_lock(&core_data->input_dev->mutex);
+static void clear_cover_mode(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int ret = 0;
+
+	if (clear_cover_mode_save(device_data) < 0)
+		return;
+
+	mutex_lock(&core_data->plat_data->enable_mutex);
 	ret = goodix_set_cover_mode(core_data);
-	mutex_unlock(&core_data->input_dev->mutex);
+	mutex_unlock(&core_data->plat_data->enable_mutex);
 
-out:
 	if (ret < 0) {
 		ts_err("failed to set cover %s [%d]",
 					core_data->flip_enable ? "close" : "open",
 					core_data->plat_data->cover_type);
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
 		ts_info("set cover %s [%d] success",
 					core_data->flip_enable ? "close" : "open",
 					core_data->plat_data->cover_type);
-		snprintf(buff, sizeof(buff), "OK");
-		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-exit:
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
 int set_refresh_rate_mode(struct goodix_ts_core *core_data)
@@ -3291,42 +2729,37 @@ byte[0]: 60 / 90 | 120
 * 1 : adaptive
 * 2 : always (90Hz/120hz)
 */
-static void refresh_rate_mode(void *device_data)
+static int refresh_rate_mode_save(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret;
-
-	sec_cmd_set_default_result(sec);
-
-	if (!core_data->refresh_rate_enable) {
-		ts_err("not support cmd(%d)!", sec->cmd_param[0]);
-		goto NG;
-	}
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 2) {
 		ts_err("not support param[%d]", sec->cmd_param[0]);
-		goto NG;
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return SEC_ERROR;
 	}
 
 	core_data->refresh_rate = sec->cmd_param[0];
 
-	ret = set_refresh_rate_mode(core_data);
-	if (ret < 0)
-		goto NG;
-
-	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-	return;
+	return SEC_SUCCESS;
+}
 
-NG:
-	snprintf(buff, sizeof(buff), "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+static void refresh_rate_mode(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
+	int ret;
+
+	if (refresh_rate_mode_save(device_data) < 0)
+		return;
+
+	ret = set_refresh_rate_mode(core_data);
+	if (ret < 0) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		return;
+	}
 }
 
 /*
@@ -3340,15 +2773,9 @@ static void dead_zone_enable(void *device_data)
 	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
 	struct goodix_ts_cmd temp_cmd;
 	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
 
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec_cmd_set_cmd_exit(sec);
 		return;
 	}
 
@@ -3364,140 +2791,91 @@ static void dead_zone_enable(void *device_data)
 	ret = core_data->hw_ops->send_cmd(core_data, &temp_cmd);
 	if (ret < 0) {
 		ts_err("send report edge cmd failed");
-		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buff, sizeof(buff), "OK");
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 }
 
 static void not_support_cmd(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	char buff[16] = { 0 };
 
-	sec_cmd_set_default_result(sec);
-	snprintf(buff, sizeof(buff), "%s", "NA");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
 	sec_cmd_set_cmd_exit(sec);
-
-	ts_info("%s", buff);
 }
 
 static struct sec_cmd sec_cmds[] = {
-	{SEC_CMD("fw_update", fw_update),},
-	{SEC_CMD("get_fw_ver_bin", get_fw_ver_bin),},
-	{SEC_CMD("get_fw_ver_ic", get_fw_ver_ic),},
-	{SEC_CMD("get_config_ver", get_config_ver),},
-	{SEC_CMD("module_off_master", module_off_master),},
-	{SEC_CMD("module_on_master", module_on_master),},
-	{SEC_CMD("get_chip_vendor", get_chip_vendor),},
-	{SEC_CMD("get_chip_name", get_chip_name),},
-	{SEC_CMD("get_x_num", get_x_num),},
-	{SEC_CMD("get_y_num", get_y_num),},
-	{SEC_CMD("set_factory_level", set_factory_level),},
-//	{SEC_CMD("get_checksum_data", get_checksum_data),},
-//	{SEC_CMD("get_crc_check", check_fw_corruption),},
-	{SEC_CMD("run_cs_raw_read_all", run_cs_raw_read_all),},
-	{SEC_CMD("run_cs_delta_read_all", run_cs_delta_read_all),},
-	{SEC_CMD("run_rawdata_read", run_rawdata_read),},
-	{SEC_CMD("run_rawdata_read_all", run_rawdata_read_all),},
-	{SEC_CMD("get_gap_data_all", get_gap_data_all),},
-	{SEC_CMD("run_high_frequency_rawdata_read", run_high_frequency_rawdata_read),},
-	{SEC_CMD("run_high_frequency_rawdata_read_all", run_high_frequency_rawdata_read_all),},
-	{SEC_CMD("get_high_frequency_gap_data_all", get_high_frequency_gap_data_all),},
-	{SEC_CMD("run_low_frequency_rawdata_read", run_low_frequency_rawdata_read),},
-	{SEC_CMD("run_low_frequency_rawdata_read_all", run_low_frequency_rawdata_read_all),},
-	{SEC_CMD("get_low_frequency_gap_data_all", get_low_frequency_gap_data_all),},
-	{SEC_CMD("run_diffdata_read", run_diffdata_read),},
-	{SEC_CMD("run_diffdata_read_all", run_diffdata_read_all),},
-	{SEC_CMD("run_self_rawdata_tx_read", run_self_rawdata_tx_read),},
-	{SEC_CMD("run_self_rawdata_tx_read_all", run_self_rawdata_tx_read_all),},
-	{SEC_CMD("run_self_rawdata_rx_read", run_self_rawdata_rx_read),},
-	{SEC_CMD("run_self_rawdata_rx_read_all", run_self_rawdata_rx_read_all),},
-	{SEC_CMD("run_self_diffdata_read", run_self_diffdata_read),},
-	{SEC_CMD("run_self_diffdata_read_all", run_self_diffdata_read_all),},
-	{SEC_CMD("run_trx_short_test", run_trx_short_test),},
-	{SEC_CMD("run_jitter_test", run_jitter_test),},
-	{SEC_CMD("run_jitter_delta_test", run_jitter_delta_test),},
-	{SEC_CMD("run_interrupt_gpio_test", run_interrupt_gpio_test),},
-	{SEC_CMD_H("glove_mode", glove_mode),},
-	{SEC_CMD_H("clear_cover_mode", clear_cover_mode),},
-//	{SEC_CMD("set_wirelesscharger_mode", set_wirelesscharger_mode),},
-	{SEC_CMD("set_grip_data", set_grip_data),},
-	{SEC_CMD_H("refresh_rate_mode", refresh_rate_mode),},
-	{SEC_CMD("dead_zone_enable", dead_zone_enable),},
-	{SEC_CMD_H("spay_enable", spay_enable),},
-	{SEC_CMD_H("aod_enable", aod_enable),},
-	{SEC_CMD("set_aod_rect", set_aod_rect),},
-	{SEC_CMD("get_aod_rect", get_aod_rect),},
-	{SEC_CMD_H("aot_enable", aot_enable),},
-	{SEC_CMD_H("fod_lp_mode", fod_lp_mode),},
-	{SEC_CMD_H("fod_enable", fod_enable),},
-	{SEC_CMD("set_fod_rect", set_fod_rect),},
-	{SEC_CMD_H("singletap_enable", singletap_enable),},
-//	{SEC_CMD_H("external_noise_mode", external_noise_mode),},
-//	{SEC_CMD_H("set_touchable_area", set_touchable_area),},
-	{SEC_CMD("increase_disassemble_count", increase_disassemble_count),},
-	{SEC_CMD("get_disassemble_count", get_disassemble_count),},
-	{SEC_CMD("factory_cmd_result_all", factory_cmd_result_all),},
-	{SEC_CMD("factory_cmd_result_all_imagetest", factory_cmd_result_all_imagetest),},
-	{SEC_CMD_H("fix_active_mode", fix_active_mode),},
-//	{SEC_CMD_H("touch_aging_mode", touch_aging_mode),},
-	{SEC_CMD("run_snr_non_touched", run_snr_non_touched),},
-	{SEC_CMD("run_snr_touched", run_snr_touched),},
-	{SEC_CMD("run_sram_test", run_sram_test),},
-	{SEC_CMD("set_sip_mode", set_sip_mode),},
-	{SEC_CMD_H("set_note_mode", set_note_mode),},
-	{SEC_CMD_H("set_game_mode", set_game_mode),},
-	{SEC_CMD_H("pocket_mode_enable", pocket_mode_enable),},
-	{SEC_CMD_H("ear_detect_enable", ear_detect_enable),},
-	{SEC_CMD("low_sensitivity_mode_enable", low_sensitivity_mode_enable),},
-	{SEC_CMD("run_prox_intensity_read_all", run_prox_intensity_read_all),},
+	{SEC_CMD_V2("fw_update", fw_update, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("get_fw_ver_bin", get_fw_ver_bin, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("get_fw_ver_ic", get_fw_ver_ic, NULL, CHECK_ON_LP, WAIT_RESULT),},
+	{SEC_CMD_V2("get_config_ver", get_config_ver, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("module_off_master", module_off_master, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("module_on_master", module_on_master, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("get_chip_vendor", get_chip_vendor, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("get_chip_name", get_chip_name, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("get_x_num", get_x_num, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("get_y_num", get_y_num, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("run_cs_raw_read_all", run_cs_raw_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_cs_delta_read_all", run_cs_delta_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_rawdata_read", run_rawdata_read, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_rawdata_read_all", run_rawdata_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("get_gap_data_all", get_gap_data_all, NULL, CHECK_ALL, WAIT_RESULT),},
+	{SEC_CMD_V2("run_high_frequency_rawdata_read", run_high_frequency_rawdata_read, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_high_frequency_rawdata_read_all", run_high_frequency_rawdata_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("get_high_frequency_gap_data_all", get_high_frequency_gap_data_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_low_frequency_rawdata_read", run_low_frequency_rawdata_read, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_low_frequency_rawdata_read_all", run_low_frequency_rawdata_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("get_low_frequency_gap_data_all", get_low_frequency_gap_data_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_diffdata_read", run_diffdata_read, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_diffdata_read_all", run_diffdata_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_self_rawdata_tx_read", run_self_rawdata_tx_read, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_self_rawdata_tx_read_all", run_self_rawdata_tx_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_self_rawdata_rx_read", run_self_rawdata_rx_read, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_self_rawdata_rx_read_all", run_self_rawdata_rx_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_self_diffdata_read", run_self_diffdata_read, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_self_diffdata_read_all", run_self_diffdata_read_all, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_trx_short_test", run_trx_short_test, NULL, CHECK_ON_LP, WAIT_RESULT),},
+	{SEC_CMD_V2("run_jitter_test", run_jitter_test, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_jitter_delta_test", run_jitter_delta_test, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_interrupt_gpio_test", run_interrupt_gpio_test, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("increase_disassemble_count", increase_disassemble_count, NULL, CHECK_ON_LP,  WAIT_RESULT),},
+	{SEC_CMD_V2("get_disassemble_count", get_disassemble_count, NULL, CHECK_ON_LP,  WAIT_RESULT),},
+	{SEC_CMD_V2("factory_cmd_result_all", factory_cmd_result_all, NULL, CHECK_ALL,  WAIT_RESULT),},
+	{SEC_CMD_V2("factory_cmd_result_all_imagetest", factory_cmd_result_all_imagetest, NULL, CHECK_ALL,  WAIT_RESULT),},
+	{SEC_CMD_V2("run_snr_non_touched", run_snr_non_touched, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_snr_touched", run_snr_touched, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_sram_test", run_sram_test, NULL, CHECK_POWERON, WAIT_RESULT),},
+	{SEC_CMD_V2("run_prox_intensity_read_all", run_prox_intensity_read_all, NULL, CHECK_ON_LP, WAIT_RESULT),},
+	{SEC_CMD_V2_H("glove_mode", glove_mode, glove_mode_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("clear_cover_mode", clear_cover_mode, clear_cover_mode_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2("set_grip_data", set_grip_data, set_grip_data_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("refresh_rate_mode", refresh_rate_mode, refresh_rate_mode_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2("dead_zone_enable", dead_zone_enable, NULL, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("spay_enable", spay_enable, spay_enable_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("aod_enable", aod_enable, aod_enable_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2("set_aod_rect", set_aod_rect, set_aod_rect_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2("get_aod_rect", get_aod_rect, NULL, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("aot_enable", aot_enable, aot_enable_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("fod_lp_mode", fod_lp_mode, NULL, CHECK_ALL, EXIT_RESULT),},
+	{SEC_CMD_V2("fod_enable", fod_enable, NULL, CHECK_ALL, EXIT_RESULT),},
+	{SEC_CMD_V2("set_fod_rect", set_fod_rect, set_fod_rect_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("singletap_enable", singletap_enable, singletap_enable_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("fix_active_mode", fix_active_mode, NULL, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2("set_sip_mode", set_sip_mode, NULL, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2("set_note_mode", set_note_mode, NULL, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("set_game_mode", set_game_mode, NULL, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("pocket_mode_enable", pocket_mode_enable, pocket_mode_enable_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("ear_detect_enable", ear_detect_enable, ear_detect_enable_save, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2("low_sensitivity_mode_enable", low_sensitivity_mode_enable, low_sensitivity_mode_enable_save, CHECK_ON_LP, EXIT_RESULT),},
 #if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
-	{SEC_CMD_H("pocket_mode_state", pocket_mode_state),},
-	{SEC_CMD_H("ear_detect_state", ear_detect_state),},
+	{SEC_CMD_V2_H("pocket_mode_state", pocket_mode_state, NULL, CHECK_ON_LP, EXIT_RESULT),},
+	{SEC_CMD_V2_H("ear_detect_state", ear_detect_state, NULL, CHECK_ON_LP, EXIT_RESULT),},
 #endif
-	{SEC_CMD("check_connection", check_connection),},
-	{SEC_CMD("debug", debug),},
-	{SEC_CMD("not_support_cmd", not_support_cmd),},
+	{SEC_CMD_V2("check_connection", check_connection, NULL, CHECK_POWERON, EXIT_RESULT),},
+	{SEC_CMD_V2("debug", debug, NULL, CHECK_ALL, EXIT_RESULT),},
+	{SEC_CMD_V2("not_support_cmd", not_support_cmd, NULL, CHECK_ALL, EXIT_RESULT),},
 };
-
-static ssize_t prox_power_off_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-
-	ts_info("%s: %d\n", __func__, core_data->plat_data->prox_power_off);
-
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", core_data->plat_data->prox_power_off);
-}
-
-static ssize_t prox_power_off_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct goodix_ts_core *core_data = container_of(sec, struct goodix_ts_core, sec);
-	long data;
-	int ret;
-
-	ret = kstrtol(buf, 10, &data);
-	if (ret < 0)
-		return ret;
-
-	ts_info("%s: %ld", __func__, data);
-
-	core_data->plat_data->prox_power_off = data;
-
-	return count;
-}
 
 /** virtual_prox **/
 static ssize_t protos_event_show(struct device *dev,
@@ -3534,7 +2912,7 @@ static ssize_t protos_event_store(struct device *dev,
 	core_data->plat_data->ed_enable = data;
 	ts_info("ear detect mode(%d)", core_data->plat_data->ed_enable);
 
-	if (core_data->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
+	if (atomic_read(&core_data->plat_data->power_state) == SEC_INPUT_STATE_POWER_OFF) {
 		ts_err("IC is OFF");
 		return count;
 	}
@@ -3561,7 +2939,7 @@ static ssize_t sensitivity_mode_show(struct device *dev,
 	int retry = 20;
 	unsigned int sen_addr = cd->production_test_addr;
 
-	if (cd->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
+	if (atomic_read(&cd->plat_data->power_state) == SEC_INPUT_STATE_POWER_OFF) {
 		ts_err("power off in IC");
 		return 0;
 	}
@@ -3622,7 +3000,7 @@ static ssize_t sensitivity_mode_store(struct device *dev,
 	int ret = 0;
 	unsigned char sen_cmd = cd->sensitive_cmd;
 
-	if (cd->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
+	if (atomic_read(&cd->plat_data->power_state) == SEC_INPUT_STATE_POWER_OFF) {
 		ts_err("power off in IC");
 		return 0;
 	}
@@ -3677,7 +3055,7 @@ static ssize_t single_driving_store(struct device *dev,
 		return 0;
 	}
 
-	if (cd->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
+	if (atomic_read(&cd->plat_data->power_state) == SEC_INPUT_STATE_POWER_OFF) {
 		ts_err("power off in IC");
 		return 0;
 	}
@@ -3705,56 +3083,6 @@ static ssize_t single_driving_store(struct device *dev,
 	ts_info("single driving mode(%ld)", value);
 
 	return count;
-}
-
-/*
- * read_support_feature function
- * returns the bit combination of specific feature that is supported.
- */
-static ssize_t support_feature_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	u32 feature = 0;
-
-	if (ts->plat_data->enable_settings_aot)
-		feature |= INPUT_FEATURE_ENABLE_SETTINGS_AOT;
-
-	if (ts->plat_data->sync_reportrate_120)
-		feature |= INPUT_FEATURE_ENABLE_SYNC_RR120;
-
-	if (ts->plat_data->support_vrr)
-		feature |= INPUT_FEATURE_ENABLE_VRR;
-
-	if (ts->plat_data->support_open_short_test)
-		feature |= INPUT_FEATURE_SUPPORT_OPEN_SHORT_TEST;
-
-	if (ts->plat_data->support_mis_calibration_test)
-		feature |= INPUT_FEATURE_SUPPORT_MIS_CALIBRATION_TEST;
-
-	if (ts->plat_data->support_wireless_tx)
-		feature |= INPUT_FEATURE_SUPPORT_WIRELESS_TX;
-
-	if (ts->plat_data->support_input_monitor)
-		feature |= INPUT_FEATURE_SUPPORT_INPUT_MONITOR;
-
-	if (ts->plat_data->enable_sysinput_enabled)
-		feature |= INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED;
-
-	ts_info("%d%s%s%s%s%s%s%s%s%s",
-			feature,
-			feature & INPUT_FEATURE_ENABLE_SETTINGS_AOT ? " aot" : "",
-			feature & INPUT_FEATURE_ENABLE_PRESSURE ? " pressure" : "",
-			feature & INPUT_FEATURE_ENABLE_SYNC_RR120 ? " RR120hz" : "",
-			feature & INPUT_FEATURE_ENABLE_VRR ? " vrr" : "",
-			feature & INPUT_FEATURE_SUPPORT_OPEN_SHORT_TEST ? " openshort" : "",
-			feature & INPUT_FEATURE_SUPPORT_MIS_CALIBRATION_TEST ? " miscal" : "",
-			feature & INPUT_FEATURE_SUPPORT_WIRELESS_TX ? " wirelesstx" : "",
-			feature & INPUT_FEATURE_SUPPORT_INPUT_MONITOR ? " inputmonitor" : "",
-			feature & INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED ? " SE" : "");
-
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", feature);
 }
 
 static ssize_t scrub_pos_show(struct device *dev,
@@ -3831,7 +3159,7 @@ static ssize_t get_lp_dump(struct device *dev, struct device_attribute *attr, ch
 	int i, ret, dump_area, dump_gain;
 	unsigned char *sec_spg_dat;
 
-	if (cd->plat_data->power_state == SEC_INPUT_STATE_POWER_OFF) {
+	if (atomic_read(&cd->plat_data->power_state) == SEC_INPUT_STATE_POWER_OFF) {
 		ts_err("Touch is stopped!");
 		return snprintf(buf, SEC_CMD_BUF_SIZE, "TSP turned off");
 	}
@@ -3966,101 +3294,22 @@ out:
 	return strlen(buf);
 }
 
-static ssize_t enabled_show(struct device *dev, struct device_attribute *attr,
-					char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-
-	if (!ts->plat_data->enable_sysinput_enabled)
-		return -EINVAL;
-
-	ts_info("%d", ts->plat_data->enabled);
-
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", ts->plat_data->enabled);
-}
-
-static ssize_t enabled_store(struct device *dev, struct device_attribute *attr,
-					const char *buf, size_t count)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct goodix_ts_core *ts = container_of(sec, struct goodix_ts_core, sec);
-	struct input_dev *input_dev = ts->plat_data->input_dev;
-	int buff[2];
-	int ret;
-
-	if (!ts->plat_data->enable_sysinput_enabled)
-		return -EINVAL;
-
-	ret = sscanf(buf, "%d,%d", &buff[0], &buff[1]);
-	if (ret != 2) {
-		ts_err("failed read params [%d]\n", ret);
-		return -EINVAL;
-	}
-
-	if (buff[0] == DISPLAY_STATE_ON && buff[1] == DISPLAY_EVENT_LATE) {
-		if (ts->plat_data->enabled) {
-			ts_info("device already enabled\n");
-			goto out;
-		}
-
-		ret = sec_input_enable_device(input_dev);
-	} else if (buff[0] == DISPLAY_STATE_OFF && buff[1] == DISPLAY_EVENT_EARLY) {
-		if (!ts->plat_data->enabled) {
-			ts_info("device already disabled\n");
-			goto out;
-		}
-
-		ret = sec_input_disable_device(input_dev);
-	} else if (buff[0] == DISPLAY_STATE_FORCE_ON) {
-		if (ts->plat_data->enabled) {
-			ts_info("device already enabled\n");
-			goto out;
-		}
-
-		ret = sec_input_enable_device(input_dev);
-		ts_info("DISPLAY_STATE_FORCE_ON(%d)\n", ret);
-	} else if (buff[0] == DISPLAY_STATE_FORCE_OFF) {
-		if (!ts->plat_data->enabled) {
-			ts_info("device already disabled\n");
-			goto out;
-		}
-
-		ret = sec_input_disable_device(input_dev);
-		ts_info("DISPLAY_STATE_FORCE_OFF(%d)\n", ret);
-	}
-
-	if (ret)
-		return ret;
-
-out:
-	return count;
-}
-
-static DEVICE_ATTR(prox_power_off, 0664, prox_power_off_show, prox_power_off_store);
 static DEVICE_ATTR(virtual_prox, 0664, protos_event_show, protos_event_store);
 static DEVICE_ATTR(sensitivity_mode, 0664, sensitivity_mode_show, sensitivity_mode_store);
 static DEVICE_ATTR(single_driving, 0220, NULL, single_driving_store);
-static DEVICE_ATTR(support_feature, 0444, support_feature_show, NULL);
 static DEVICE_ATTR(scrub_pos, 0444, scrub_pos_show, NULL);
 static DEVICE_ATTR(fod_pos, 0444, goodix_fod_position_show, NULL);
 static DEVICE_ATTR(fod_info, 0444, goodix_fod_info_show, NULL);
 static DEVICE_ATTR(get_lp_dump, 0444, get_lp_dump, NULL);
-static DEVICE_ATTR(enabled, 0664, enabled_show, enabled_store);
 
 static struct attribute *cmd_attributes[] = {
 	&dev_attr_scrub_pos.attr,
-//	&dev_attr_hw_param.attr,
 	&dev_attr_sensitivity_mode.attr,
 	&dev_attr_single_driving.attr,
-	&dev_attr_support_feature.attr,
 	&dev_attr_get_lp_dump.attr,
-	&dev_attr_prox_power_off.attr,
 	&dev_attr_virtual_prox.attr,
 	&dev_attr_fod_pos.attr,
 	&dev_attr_fod_info.attr,
-//	&dev_attr_aod_active_area.attr,
-	&dev_attr_enabled.attr,
 	NULL,
 };
 
@@ -4072,18 +3321,10 @@ int goodix_ts_cmd_init(struct goodix_ts_core *ts)
 {
 	int retval = 0;
 
-	retval = sec_cmd_init(&ts->sec, sec_cmds,
-			ARRAY_SIZE(sec_cmds), SEC_CLASS_DEVT_TSP);
+	retval = sec_cmd_init(&ts->sec, ts->bus->dev, sec_cmds,
+			ARRAY_SIZE(sec_cmds), SEC_CLASS_DEVT_TSP, &cmd_attr_group);
 	if (retval < 0) {
 		ts_err("Failed to sec_cmd_init");
-		goto exit;
-	}
-
-	retval = sysfs_create_group(&ts->sec.fac_dev->kobj,
-			&cmd_attr_group);
-	if (retval < 0) {
-		ts_err("Failed to create sysfs attributes");
-		sec_cmd_exit(&ts->sec, SEC_CLASS_DEVT_TSP);
 		goto exit;
 	}
 
@@ -4091,16 +3332,6 @@ int goodix_ts_cmd_init(struct goodix_ts_core *ts)
 			&ts->input_dev->dev.kobj, "input");
 	if (retval < 0) {
 		ts_err("Failed to create input symbolic link");
-		sysfs_remove_group(&ts->sec.fac_dev->kobj, &cmd_attr_group);
-		sec_cmd_exit(&ts->sec, SEC_CLASS_DEVT_TSP);
-		goto exit;
-	}
-
-	retval = sec_input_sysfs_create(&ts->plat_data->input_dev->dev.kobj);
-	if (retval < 0) {
-		ts_err("Failed to create sec_input_sysfs attributes");
-		sysfs_remove_link(&ts->sec.fac_dev->kobj, "input");
-		sysfs_remove_group(&ts->sec.fac_dev->kobj, &cmd_attr_group);
 		sec_cmd_exit(&ts->sec, SEC_CLASS_DEVT_TSP);
 		goto exit;
 	}
@@ -4115,12 +3346,7 @@ void goodix_ts_cmd_remove(struct goodix_ts_core *ts)
 {
 	ts_info("called");
 
-	sec_input_sysfs_remove(&ts->plat_data->input_dev->dev.kobj);
-
 	sysfs_remove_link(&ts->sec.fac_dev->kobj, "input");
-
-	sysfs_remove_group(&ts->sec.fac_dev->kobj,
-			&cmd_attr_group);
 
 	sec_cmd_exit(&ts->sec, SEC_CLASS_DEVT_TSP);
 }

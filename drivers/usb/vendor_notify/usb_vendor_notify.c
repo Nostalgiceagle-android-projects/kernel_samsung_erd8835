@@ -91,6 +91,32 @@ int send_usb_vendor_notify_audio_uevent(struct usb_device *dev, int card_num,
 }
 EXPORT_SYMBOL(send_usb_vendor_notify_audio_uevent);
 
+int send_usb_vendor_notify_new_device(struct usb_device *dev)
+{
+	int ret = 0;
+	int action;
+	struct data_new_device data;
+
+	if (!usb_vendor_notifier) {
+		pr_err("%s: not initialized\n", __func__);
+		return -ENODATA;
+	}
+
+	action = USB_VENDOR_NOTIFY_NEW_DEVICE;
+	data.dev = dev;
+	data.ret = 0;
+
+	ret = blocking_notifier_call_chain(usb_vendor_notifier, action, &data);
+	if (ret != NOTIFY_DONE && ret != NOTIFY_OK)
+		pr_err("%s: err(%d)\n", __func__, ret);
+
+	if (data.ret)
+		ret = data.ret;
+
+	return ret;
+}
+EXPORT_SYMBOL(send_usb_vendor_notify_new_device);
+
 static int usb_vendor_notify_probe(struct platform_device *pdev)
 {
 	int ret = 0;

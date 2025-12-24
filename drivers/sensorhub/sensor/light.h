@@ -21,18 +21,22 @@
 
 #define LIGHT_COEF_SIZE 7
 
+#ifdef CONFIG_SHUB_TEST_FOR_ONLY_UML
+#define LIGHT_CALIBRATION_FILE_PATH "calibration_data.txt"
+#else
 #define LIGHT_CALIBRATION_FILE_PATH "/efs/FactoryApp/light_cal_data"
+#endif
+
 #define PANEL_TYPE_FILE_PATH "sys/class/lcd/panel/lcd_type"
-#define LIGHT_DEBIG_EVENT_SIZE_4BYTE_VERSION	2000
+#define LIGHT_EVENT_SIZE_4BYTE_VERSION	2000
 #define LIGHT_CAL_CH0_SIZE_4BYTE_VERSION		3000
-#define DDI_SUPPORT 2
 
 struct light_event {
 	u32 lux;	/* lux, cct, raw_lux : fix 4byte */
 	s32 cct;
 	u32 raw_lux;
 	s32 r;		/* r, g, b, w, a_time, a_gain : 2byte or 4byte */
-	s32 g;		/* LIGHT_DEBIG_EVENT_SIZE_4BYTE_VERSION : 4byte, others : 2byte */
+	s32 g;		/* LIGHT_EVENT_SIZE_4BYTE_VERSION : 4byte, others : 2byte */
 	s32 b;
 	s32 w;
 	s32 a_time;
@@ -46,7 +50,7 @@ struct light_cct_event {
 	u32 raw_lux;
 	u16 roi;	/* roi : ddi_support is supported */
 	u32 r;		/* r, g, b, w, a_time, a_gain : 2byte or 4byte */
-	u32 g;		/* LIGHT_DEBIG_EVENT_SIZE_4BYTE_VERSION : 4byte, others : 2byte */
+	u32 g;		/* LIGHT_EVENT_SIZE_4BYTE_VERSION : 4byte, others : 2byte */
 	u32 b;
 	u32 w;
 	u32 a_time;
@@ -81,7 +85,7 @@ struct light_data {
 	struct light_cal_data cal_data;
 };
 
-void set_light_ddi_support(uint32_t ddi_support);
+void set_light_ddi_support(uint32_t system_feature);
 
 
 /* light sub command */

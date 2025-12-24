@@ -31,15 +31,15 @@
 #include <linux/muic/common/muic_notifier.h>
 #include <linux/muic/common/muic.h>
 #include <linux/muic/common/muic_sysfs.h>
+#if IS_ENABLED(CONFIG_DRV_SAMSUNG)
 #include <linux/sec_class.h>
+#endif
 #if IS_ENABLED(CONFIG_BATTERY_SAMSUNG)
 #include <linux/battery/sec_battery_common.h>
 #endif
 #if IS_BUILTIN(CONFIG_MUIC_NOTIFIER)
 #if defined(CONFIG_ARCH_QCOM)
 #include <linux/sec_param.h>
-#else
-#include <linux/sec_ext.h>
 #endif
 #endif
 #if IS_ENABLED(CONFIG_IF_CB_MANAGER)
@@ -678,6 +678,7 @@ int muic_sysfs_init(struct muic_platform_data *pdata)
 
 	mutex_init(&pdata->sysfs_mutex);
 
+#if IS_ENABLED(CONFIG_DRV_SAMSUNG)
 	if (pdata->switch_device == NULL)
 		pdata->switch_device = switch_device;
 
@@ -687,6 +688,7 @@ int muic_sysfs_init(struct muic_platform_data *pdata)
 		return ret;
 	}
 	dev_set_drvdata(pdata->switch_device, pdata);
+#endif
 
 	return ret;
 }

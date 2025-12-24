@@ -22,6 +22,7 @@
 #else
 #include <linux/battery/sec_pd.h>
 #endif
+#include <linux/mfd/sm/sm5714/sm5714_log.h>
 #include <linux/usb/typec/sm/sm5714/sm5714_pd.h>
 #include <linux/usb/typec/sm/sm5714/sm5714_typec.h>
 #include <linux/delay.h>
@@ -389,11 +390,11 @@ static policy_state sm5714_usbpd_policy_src_negotiate_capability(
 		if (pd_data->protocol_tx.status == MESSAGE_SENT) {
 			if (pd_data->source_request_obj.request_data_object.object_position == 1) {
 				if (!pdic_data->is_otg_vboost) {
-					pr_info("%s booster off\n", __func__);
+					sm5714_info("%s booster off\n", __func__);
 					sm5714_usbpd_turn_off_reverse_booster(pd_data);
 				}
 			} else if (pd_data->source_request_obj.request_data_object.object_position == 2) {
-				pr_info("%s otg off\n", __func__);
+				sm5714_info("%s otg off\n", __func__);
 				sm5714_vbus_turn_on_ctrl(pdic_data, 0);
 			}
 			return PE_SRC_Transition_Supply;
@@ -414,11 +415,11 @@ static policy_state sm5714_usbpd_policy_src_transition_supply(
 	if (policy->last_state != policy->state) {
 		if (pd_data->source_request_obj.request_data_object.object_position == 1) {
 			if (!pdic_data->is_otg_vboost) {
-				pr_info("%s otg on\n", __func__);
+				sm5714_info("%s otg on\n", __func__);
 				sm5714_usbpd_turn_on_source(pd_data);
 			}
 		} else if (pd_data->source_request_obj.request_data_object.object_position == 2) {
-			pr_info("%s booster on\n", __func__);
+			sm5714_info("%s booster on\n", __func__);
 			sm5714_usbpd_turn_on_reverse_booster(pd_data);
 		}
 		msleep(tSrcTransition);
@@ -572,7 +573,7 @@ static policy_state sm5714_usbpd_policy_src_transition_to_default(
 			sm5714_src_transition_to_pwr_on(pd_data);
 			return PE_SRC_Startup;
 		} else {
-			pr_info("%s : cable is detached!\n", __func__);
+			sm5714_info("%s : cable is detached!\n", __func__);
 			return 0;
 		}
 	}
@@ -902,7 +903,7 @@ static policy_state sm5714_usbpd_policy_snk_evaluate_capability(
 				psy_do_property("battery", set, POWER_SUPPLY_EXT_PROP_SRCCAP, val);
 			}
 		} else {
-			pr_err("%s: Fail to get psy battery\n", __func__);
+			sm5714_err("%s: Fail to get psy battery\n", __func__);
 		}
 #endif
 		return PE_SNK_Select_Capability;
@@ -978,7 +979,7 @@ static policy_state sm5714_usbpd_policy_snk_transition_sink(
 				psy_do_property("battery", set, POWER_SUPPLY_EXT_PROP_SRCCAP, val);
 			}
 		} else {
-			pr_err("%s: Fail to get psy battery\n", __func__);
+			sm5714_err("%s: Fail to get psy battery\n", __func__);
 		}
 #endif
 #if defined(CONFIG_SM5714_SUPPORT_SBU)
@@ -1046,7 +1047,7 @@ static policy_state sm5714_usbpd_policy_snk_hard_reset(
 	struct sm5714_phydrv_data *pdic_data = pd_data->phy_driver_data;
 
 	if (policy->abnormal_state) {
-		pr_info("%s : cable is detached!\n", __func__);
+		sm5714_info("%s : cable is detached!\n", __func__);
 		return 0;
 	}
 
@@ -3362,7 +3363,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_attention_request(
 			if (policy->rx_data_obj[1].displayport_status.irq_hpd == 1)
 				hpdirq = 2;
 
-			pr_info("%s : dp_selected_pin : %d, hpd : %d, hpdirq : %d\n",
+			sm5714_info("%s : dp_selected_pin : %d, hpd : %d, hpdirq : %d\n",
 					__func__, manager->dp_selected_pin,
 					hpd, hpdirq);
 			sm5714_pdic_event_work(pdic_data,
@@ -3426,7 +3427,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_status_update(
 	} else if (pd_data->protocol_tx.status != DEFAULT_PROTOCOL_NONE) {
 		if (pd_data->protocol_tx.status == MESSAGE_SENT) {
 			if (sm5714_usbpd_wait_msg(pd_data, BITMSG(VDM_DP_STATUS_UPDATE), tVDMSenderResponse)) {
-				pr_info("%s : command(%d), command_type(%d), obj_pos(%d), version(%d), vdm_type(%d)\n",
+				sm5714_info("%s : command(%d), command_type(%d), obj_pos(%d), version(%d), vdm_type(%d)\n",
 					__func__, policy->rx_data_obj[0].structured_vdm.command,
 				policy->rx_data_obj[0].structured_vdm.command_type,
 				policy->rx_data_obj[0].structured_vdm.obj_pos,
@@ -3435,7 +3436,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_status_update(
 
 				if (policy->rx_data_obj[0].structured_vdm.command_type == Responder_ACK) {
 					if (policy->rx_data_obj[1].displayport_status.port_connected == 0x00) {
-						pr_info("%s : port disconnected!\n", __func__);
+						sm5714_info("%s : port disconnected!\n", __func__);
 					} else {
 						if (policy->rx_data_obj[1].displayport_status.multi_function_preferred == 1) {
 							if (manager->pin_assignment & PIN_ASSIGNMENT_D)
@@ -3451,7 +3452,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_status_update(
 							else if (manager->pin_assignment & PIN_ASSIGNMENT_A)
 								manager->dp_selected_pin = PDIC_NOTIFY_DP_PIN_A;
 							else
-								pr_info("%s : Wrong pin assignment value\n", __func__);
+								sm5714_info("%s : Wrong pin assignment value\n", __func__);
 						} else {
 							if (manager->pin_assignment & PIN_ASSIGNMENT_C)
 								manager->dp_selected_pin = PDIC_NOTIFY_DP_PIN_C;
@@ -3466,7 +3467,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_status_update(
 							else if (manager->pin_assignment & PIN_ASSIGNMENT_F)
 								manager->dp_selected_pin = PDIC_NOTIFY_DP_PIN_F;
 							else
-								pr_info("%s : Wrong pin assignment value\n", __func__);
+								sm5714_info("%s : Wrong pin assignment value\n", __func__);
 						}
 						manager->is_sent_pin_configuration = 1;
 #if IS_ENABLED(CONFIG_IF_CB_MANAGER)
@@ -3488,7 +3489,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_status_update(
 						hpdirq = 2;
 
 					/* Notify to DP */
-					pr_info("%s : dp_selected_pin : %d, hpd : %d, hpdirq : %d\n",
+					sm5714_info("%s : dp_selected_pin : %d, hpd : %d, hpdirq : %d\n",
 							__func__, manager->dp_selected_pin,
 							hpd, hpdirq);
 					sm5714_pdic_event_work(pdic_data,
@@ -3592,7 +3593,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_displayport_configure(
 				else if (manager->pin_assignment & PIN_ASSIGNMENT_A)
 					manager->dp_selected_pin = PDIC_NOTIFY_DP_PIN_A;
 				else
-					pr_info("%s : Wrong pin assignment value\n", __func__);
+					sm5714_info("%s : Wrong pin assignment value\n", __func__);
 			} else {
 				if (manager->pin_assignment & PIN_ASSIGNMENT_C)
 					manager->dp_selected_pin = PDIC_NOTIFY_DP_PIN_C;
@@ -3607,7 +3608,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_displayport_configure(
 				else if (manager->pin_assignment & PIN_ASSIGNMENT_F)
 					manager->dp_selected_pin = PDIC_NOTIFY_DP_PIN_F;
 				else
-					pr_info("%s : Wrong pin assignment value\n", __func__);
+					sm5714_info("%s : Wrong pin assignment value\n", __func__);
 			}
 			manager->is_sent_pin_configuration = 1;
 #if IS_ENABLED(CONFIG_IF_CB_MANAGER)
@@ -3662,7 +3663,7 @@ static policy_state sm5714_usbpd_policy_dfp_vdm_displayport_configure(
 					if ((policy->rx_data_obj[0].structured_vdm.svid == PD_SID_1) &&
 							(manager->SVID_1 == SAMSUNG_VENDOR_ID)) {
 						manager->SVID_0 = SAMSUNG_VENDOR_ID;
-						pr_info("%s : Dex discover mode request\n", __func__);
+						sm5714_info("%s : Dex discover mode request\n", __func__);
 						sm5714_usbpd_dex_vdm_request(pd_data);
 					}
 					return PE_DFP_VDM_DisplayPort_Configure_ACKed;
@@ -3858,7 +3859,7 @@ void sm5714_usbpd_policy_work(struct work_struct *work)
 	__pm_stay_awake(pd_data->policy_engine_wake);
 	do {
 		if (!policy->plug_valid) {
-			pr_info("%s : usbpd cable is empty\n", __func__);
+			sm5714_info("%s : usbpd cable is empty\n", __func__);
 			break;
 		}
 		next_state = policy->state;
@@ -4013,7 +4014,7 @@ void sm5714_usbpd_policy_work(struct work_struct *work)
 				psy_do_property("battery", set,
 					POWER_SUPPLY_EXT_PROP_HARDRESET_OCCUR, val);
 			} else {
-				pr_err("%s: Fail to get psy battery\n", __func__);
+				sm5714_err("%s: Fail to get psy battery\n", __func__);
 			}
 #endif
 			break;
@@ -4462,7 +4463,7 @@ void sm5714_usbpd_policy_work(struct work_struct *work)
 			pd_data->phy_ops.get_power_role(pd_data, &power_role);
 
 			if (power_role == USBPD_SINK) {
-				pr_info("%s, SINK\n", __func__);
+				sm5714_info("%s, SINK\n", __func__);
 				if (policy->rx_hardreset) {
 					policy->rx_hardreset = 0;
 					policy->state =
@@ -4474,7 +4475,7 @@ void sm5714_usbpd_policy_work(struct work_struct *work)
 						psy_do_property("battery", set,
 							POWER_SUPPLY_EXT_PROP_HARDRESET_OCCUR, val);
 					} else {
-						pr_err("%s: Fail to get psy battery\n", __func__);
+						sm5714_err("%s: Fail to get psy battery\n", __func__);
 					}
 #endif
 				} else if (policy->rx_softreset) {
@@ -4487,7 +4488,7 @@ void sm5714_usbpd_policy_work(struct work_struct *work)
 					policy->state = PE_SNK_Startup;
 				}
 			} else {
-				pr_info("%s, SOURCE\n", __func__);
+				sm5714_info("%s, SOURCE\n", __func__);
 				if (policy->rx_hardreset) {
 					policy->rx_hardreset = 0;
 					policy->state =

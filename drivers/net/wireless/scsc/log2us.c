@@ -296,8 +296,6 @@ void slsi_eapol_eap_handle_tx_status(struct slsi_dev *sdev, struct netdev_vif *n
 
 	if (tx_status == FAPI_TRANSMISSIONSTATUS_SUCCESSFUL)
 		tx_status_str = "ACK";
-	else if (tx_status == FAPI_TRANSMISSIONSTATUS_RETRY_LIMIT)
-		tx_status_str = "NO_ACK";
 	else
 		tx_status_str = "TX_FAIL";
 
@@ -582,8 +580,6 @@ void slsi_conn_log2us_eapol_gtk_tx(struct slsi_dev *sdev, u32 status_code)
 
 	if (status_code == FAPI_TRANSMISSIONSTATUS_SUCCESSFUL)
 		tx_status_str = "ACK";
-	else if (status_code == FAPI_TRANSMISSIONSTATUS_RETRY_LIMIT)
-		tx_status_str = "NO_ACK";
 	else
 		tx_status_str = "TX_FAIL";
 
@@ -637,8 +633,6 @@ void slsi_conn_log2us_eapol_ptk_tx(struct slsi_dev *sdev, u32 status_code)
 	get_kernel_timestamp(time);
 	if (status_code == FAPI_TRANSMISSIONSTATUS_SUCCESSFUL)
 		tx_status_str = "ACK";
-	else if (status_code == FAPI_TRANSMISSIONSTATUS_RETRY_LIMIT)
-		tx_status_str = "NO_ACK";
 	else
 		tx_status_str = "TX_FAIL";
 
