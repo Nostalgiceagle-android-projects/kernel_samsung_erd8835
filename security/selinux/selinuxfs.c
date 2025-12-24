@@ -31,6 +31,7 @@
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
 #include <linux/ctype.h>
+#include <linux/of.h>
 
 /* selinuxfs pseudo filesystem for exporting the security policy API.
    Based on the proc code and the fs/nfsd/nfsctl.c code. */
@@ -42,6 +43,11 @@
 #include "objsec.h"
 #include "conditional.h"
 #include "ima.h"
+
+#ifdef CONFIG_SELINUX_STATE_DT_NODE
+static int boot_mode = 1;
+int sel_boot_state, dummy;
+#endif
 
 enum sel_inos {
 	SEL_ROOT_INO = 2,
@@ -143,7 +149,11 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	struct selinux_state *state = fsi->state;
 	char *page = NULL;
 	ssize_t length;
-	int old_value, new_value;
+#ifdef CONFIG_SELINUX_STATE_DT_NODE
+	int old_value, new_value, ret;
+#else
+    int old_value, new_value;
+#endif
 
 	if (count >= PAGE_SIZE)
 		return -ENOMEM;
@@ -156,11 +166,38 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	if (IS_ERR(page))
 		return PTR_ERR(page);
 
+#ifdef CONFIG_SELINUX_STATE_DT_NODE
+	selnode = of_find_node_by_path("/selinux");
+	if (!selnode) {
+		pr_info("No SELinux node was found in DT. Leaving SELinux as it is\n");
+		sel_boot_state = 0;
+	} else {
+		ret = of_property_read_u32(selnode, "sel_boot_state", &dummy);
+		if (!ret) {
+			if ((dummy == 0) || (dummy == 1)) {
+				pr_info("SELinux boot state is: %s\n", dummy);
+				sel_boot_state = dummy;
+			} else {
+				pr_info("Wrong value detected at SELinux node. Leaving SELinux as it is\n");
+				sel_boot_state = 0;
+			}
+		}
+	}
+#endif
+
 	length = -EINVAL;
 	if (sscanf(page, "%d", &new_value) != 1)
 		goto out;
 
-	new_value = !!new_value;
+#ifdef CONFIG_SELINUX_STATE_DT_NODE
+	/* SElinux is always loaded in enforcing state. Bypass this only during boot. */
+	if (sel_boot_state == 1) {
+		if ((new_value == 1) && (boot_mode == 1)) {
+			new_value = 0;
+			boot_mode = 0;
+		}
+	}
+#endif
 
 	old_value = enforcing_enabled(state);
 	if (new_value != old_value) {

@@ -5375,6 +5375,12 @@
 		};
 	};
 
+	selinux {
+		/* 0: enforcing boot
+		   1: permissive boot */
+		sel_boot_state = <1>;
+	};
+
 	cpus {
 		#address-cells = <0x02>;
 		#size-cells = <0x00>;
